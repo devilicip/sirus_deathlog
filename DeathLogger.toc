@@ -3,7 +3,7 @@
 ## Notes: Logs deaths on a hardcore server
 ## Author: github.com/LyubimovVladislav
 ## With addition by Norzia devilicip2@gmail.com for Sirius-wow
-## Version: 1.1
+## Version: 1.2
 ## SavedVariables: DeathLoggerDB
 
 Libs\LibStub\LibStub.lua

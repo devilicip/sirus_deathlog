@@ -21,16 +21,13 @@
 local addonName = "DeathLogger"
 local DeathLogWidget = {}
 local guildMembers = {}
-local previousGuildMembers = {}
-local isUpdating = false
-local updateInterval = 60  -- 60 сек
-local timeSinceLastUpdate = 0
-
+local guildMemberLevels = {}
+local HC_DEATHLOG = "HCDEATHLOG" 
+local HC_DEATHLOG_PW = "HCDEATHLOGPW"
 DeathLogWidget.__index = DeathLogWidget
 DeathLoggerDB = DeathLoggerDB or {}
 DeathLoggerDB.entries = DeathLoggerDB.entries or {}
 local widgetInstance = nil
-
 
 local DeathLoggerTooltip = CreateFrame("GameTooltip", "DeathLoggerTooltip", UIParent, "SharedTooltipTemplate")
 local DeathLog_L = {
@@ -55,7 +52,6 @@ local function ShowTooltip(self)
 		bgFile = "Interface/Tooltips/UI-Tooltip-Background",
 		insets = { left = 4, right = 4, top = 4, bottom = 4 }
 	})
-	
 	DeathLoggerTooltip:SetBackdropColor(0, 0, 0, 1)
 	DeathLoggerTooltip:Show()
 end
@@ -76,7 +72,7 @@ function DeathLogWidget.new()
 	local minWidth = DeathLoggerDB.minWidth or 100
 	local minHeight = DeathLoggerDB.minHeight or 100
 
-    instance.mainWnd = CreateFrame("Frame", "MyDialogFrame", UIParent)
+    instance.mainWnd = CreateFrame("Frame", "DLDialogFrame", UIParent)
     instance.mainWnd:SetSize(DeathLoggerDB.width or minWidth, DeathLoggerDB.height or minHeight)
     instance.mainWnd:SetPoint(DeathLoggerDB.point or "CENTER", UIParent, DeathLoggerDB.relativePoint or "CENTER", DeathLoggerDB.xOfs or 0, DeathLoggerDB.yOfs or 0)
     instance.mainWnd:SetBackdrop({
@@ -102,7 +98,6 @@ function DeathLogWidget.new()
 	resetButton:SetScript("OnClick", function()
 		StaticPopup_Show("DEATHLOGGER_CONFIRM_RESET")
 	end)
-
 	StaticPopupDialogs["DEATHLOGGER_CONFIRM_RESET"] = {
 		text = "Вы уверены что хотите очистить список умерших?",
 		button1 = "Да",
@@ -235,10 +230,8 @@ function DeathLogWidget.new()
 		instance.scrollChild:SetWidth(width - 40)
 		instance:UpdateEntriesPosition()
 	end)
-
 	instance.textFrames = {}
 	instance.previousEntry = nil
-
 	return instance
 end
 
@@ -281,16 +274,6 @@ function DeathLogWidget:CreateTextFrame()
 	end)
 	return frame
 end
-
--- на тест быстрая проверка
--- local function IsPlayerInGuild(targetName)
-    -- for _, name in ipairs(guildMembers) do
-        -- if name == targetName then
-            -- return true
-        -- end
-    -- end
-    -- return false
--- end
 
 local function IsPlayerInGuild(targetName)
     if IsInGuild() then
@@ -371,13 +354,13 @@ function DeathLogWidget:ApplyFilter(filterFunc)
 end
 
 function DeathLogWidget:Show()
-	widgetInstance.mainWnd:Show()
-	DeathLoggerDB.isShown = true
+    widgetInstance.mainWnd:Show()
+    DeathLoggerDB.isShown = true
 end
 
 function DeathLogWidget:Hide()
-	widgetInstance.mainWnd:Hide()
-	DeathLoggerDB.isShown = false
+    widgetInstance.mainWnd:Hide()
+    DeathLoggerDB.isShown = false
 end
 
 function DeathLogWidget:IsShown()
@@ -437,8 +420,6 @@ DeathLog_minimap_button.OnTooltipShow = function(tooltip)
     tooltip:AddLine(DeathLog_L.minimap_btn_right_click)
     tooltip:AddLine(string.format("Память: %.2f MB", memoryUsageMB))
 end
-
-local _, core = ...
 
 local classes = {
 	[1] = "Воин",
@@ -580,6 +561,33 @@ local function GetRaceData(id)
 	return coloredRace, race, side
 end
 
+local function IsInGlobalChannel()
+    print("|cFF00FF00[AutoJoin]|r Поиск канала '"..HC_DEATHLOG.."'...")
+    for i = 1, GetNumDisplayChannels() do
+        local name, _, _, channelType = GetChannelDisplayInfo(i)
+        if name == HC_DEATHLOG and channelType ~= "CHANNEL_CATEGORY" then
+            print("|cFF00FF00[AutoJoin]|r Канал найден (слот "..i..")")
+            return true
+        end
+    end
+    print("|cFFFF0000[AutoJoin]|r Канал не найден")
+    return false
+end
+
+local function JoinGlobalChannel()
+    if not IsInGlobalChannel() then
+        print("|cFF00FF00[AutoJoin]|r Попытка подключения к '"..HC_DEATHLOG.."'...")
+        JoinChannelByName(HC_DEATHLOG, HC_DEATHLOG_PW, nil, 1)
+            if IsInGlobalChannel() then
+                print("|cFF00FF00[AutoJoin]|r Успешно подключено!")
+            else
+                print("|cFFFF0000[AutoJoin]|r Не удалось подключиться")
+            end
+    else
+        print("|cFF00FF00[AutoJoin]|r Уже подключен к каналу")
+    end
+end
+
 local function FormatData(data)
 	local timeData = data.level >= 70 and ColorWord("[" .. TimeNow() .. "]", "Фиолетовый") or
 					 data.level >= 60 and ColorWord("[" .. TimeNow() .. "]", "Синий") or
@@ -641,8 +649,20 @@ local function SaveEntry(data, tooltip, faction, playerName)
 	})
 end
 
+local function GetPlayerGuildName()
+    if IsInGuild() then
+        local guildName = GetGuildInfo("player")
+        if guildName then
+            return guildName
+        else
+            return "Данные гильдии загружаются..."
+        end
+    else
+        return "Не состоит в гильдии"
+    end
+end
+
 local function UpdateGuildMembers()
-    guildMembers = {}
     if IsInGuild() then
         GuildRoster()
         local numMembers = GetNumGuildMembers()
@@ -656,45 +676,47 @@ local function UpdateGuildMembers()
 end
 
 local function OnDeath(text)
-	local dataMap = StringToMap(text)
-	if not dataMap.name then
-		return
-	end
-	
-	UpdateGuildMembers()
-	
-	local deadPlayerData, tooltip, playerName = FormatData(dataMap)
-	local _, _, faction = GetRaceData(dataMap.raceID)
+    UpdateGuildMembers()
+    local dataMap = StringToMap(text)
+    if not dataMap.name then
+        return
+    end
 
-	if widgetInstance then
-		widgetInstance:AddEntry(deadPlayerData, tooltip, faction, playerName)
-	end
+    local deadPlayerData, tooltip, playerName = FormatData(dataMap)
+    local _, _, faction = GetRaceData(dataMap.raceID)
+	
+    -- if IsPlayerInGuild(dataMap.name) then
+		-- local message = string.format("%s:%d:%s", dataMap.name, dataMap.level, GetPlayerGuildName())
+        -- SendAddonMessage("HC_Addon_death", message, "WHISPER" , playerName)
+		-- print("|cFF00FF00[DEBUG]|r Сообщение HC_Addon_death onDeath отправлено : " .. message)
+    -- end
 
-	SaveEntry(deadPlayerData, tooltip, faction, playerName)
+    if widgetInstance then
+        widgetInstance:AddEntry(deadPlayerData, tooltip, faction, playerName)
+    end
+    SaveEntry(deadPlayerData, tooltip, faction, playerName)
 end
 
 local function OnComplete(text)
+	UpdateGuildMembers()
 	local dataMap = StringToMap(text)
 	if not dataMap.name then
 		return
 	end
-
-	UpdateGuildMembers()
-
+	
 	local challengeCompletedData, tooltip, playerName = FormatCompletedChallengeData(dataMap)
 	local _, _, faction = GetRaceData(dataMap.raceID)
+	
+    -- if IsPlayerInGuild(dataMap.name) then
+        -- local message = string.format("%s:%d:%s", dataMap.name, dataMap.level, GetPlayerGuildName())
+        -- SendAddonMessage("HC_Addon_death", message, "WHISPER" , playerName)
+		-- print("|cFF00FF00[DEBUG]|r Сообщение HC_Addon_death onComplete отправлено : " .. message)
+    -- end
+
 	if widgetInstance then
 		widgetInstance:AddEntry(challengeCompletedData, tooltip, faction, playerName)
 	end
 	SaveEntry(challengeCompletedData, tooltip, faction, playerName)
-end
-
-local function OnEvent(self, event, prefix, text, channel, sender, target, zoneChannelID, localID, name, instanceID)
-	if prefix == "ASMSG_HARDCORE_DEATH" then
-		OnDeath(text)
-	elseif prefix == "ASMSG_HARDCORE_COMPLETE" then
-		OnComplete(text)
-	end
 end
 
 local function InitWindow(shouldShow)
@@ -714,7 +736,12 @@ local function SaveSettingsOnLogout()
 	end
 	DeathLoggerDB.guildOnly = DeathLoggerDB.guildOnly or false
 	DeathLoggerDB.isShown = widgetInstance and widgetInstance:IsShown() or false
-	DeathLoggerDB.guildMembers = guildMembers
+    DeathLoggerDB.guildMembers = nil
+
+    DeathLoggerDB.minWidth = DeathLoggerDB.minWidth or 100
+    DeathLoggerDB.minHeight = DeathLoggerDB.minHeight or 100
+    DeathLoggerDB.width = DeathLoggerDB.width or DeathLoggerDB.minWidth
+    DeathLoggerDB.height = DeathLoggerDB.height or DeathLoggerDB.minHeight
 end
 
 local function SlashCommandHandle(msg)
@@ -754,7 +781,8 @@ end
 
 local function LoadEntries()
     if DeathLoggerDB.entries and widgetInstance then
-        for _, entryData in ipairs(DeathLoggerDB.entries) do
+        for i = #DeathLoggerDB.entries, 1, -1 do
+            local entryData = DeathLoggerDB.entries[i]
             widgetInstance:AddEntry(entryData.data, entryData.tooltip, entryData.faction, entryData.playerName)
         end
         widgetInstance:ApplyFilter(function(entry)
@@ -782,7 +810,6 @@ local function CreateOptionsPanel()
 	local screenHeight = GetScreenHeight()
 	local maxWidth = screenWidth * 0.45
 	local maxHeight = screenHeight * 0.70
-
 	local minWidthLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	minWidthLabel:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -20)
 	minWidthLabel:SetText("Минимальная ширина окна (%):")
@@ -792,20 +819,20 @@ local function CreateOptionsPanel()
 	minWidthSlider:SetWidth(200)
 	minWidthSlider:SetMinMaxValues(10, 45)
 	minWidthSlider:SetValueStep(1)
-	minWidthSlider:SetValue((DeathLoggerDB.minWidth) / screenWidth * 100)
+	minWidthSlider:SetValue((DeathLoggerDB.minWidth or 100) / screenWidth * 100)
 	minWidthSlider.tooltipText = "Установите минимальную ширину окна в процентах от ширины экрана (макс. 45%)"
 	minWidthSlider.Low:SetText("10%")
 	minWidthSlider.High:SetText("45%")
 	minWidthSlider.Text = minWidthSlider:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	minWidthSlider.Text:SetPoint("TOP", minWidthSlider, "BOTTOM", 0, -5)
-	minWidthSlider.Text:SetText(math.floor((DeathLoggerDB.minWidth) / screenWidth * 100) .. "%")
+	minWidthSlider.Text:SetText(math.floor((DeathLoggerDB.minWidth or 100) / screenWidth * 100) .. "%")
 	minWidthSlider:SetScript("OnValueChanged", function(self, value)
 		local percent = math.floor(value)
 		self.Text:SetText(percent .. "%")
 		DeathLoggerDB.minWidth = screenWidth * percent / 100
-		DeathLoggerDB.width = DeathLoggerDB.minWidth  -- Сохраняем текущую ширину
+		DeathLoggerDB.width = DeathLoggerDB.minWidth
 		if widgetInstance then
-			widgetInstance.mainWnd:SetMinResize(DeathLoggerDB.minWidth, DeathLoggerDB.minHeight)
+			widgetInstance.mainWnd:SetMinResize(DeathLoggerDB.minWidth or 100, DeathLoggerDB.minHeight or 100)
 			widgetInstance.mainWnd:SetMaxResize(maxWidth, maxHeight)
 			local currentWidth, currentHeight = widgetInstance.mainWnd:GetSize()
 			widgetInstance.mainWnd:SetWidth(math.min(DeathLoggerDB.minWidth, maxWidth))
@@ -821,19 +848,19 @@ local function CreateOptionsPanel()
 	minHeightSlider:SetWidth(200)
 	minHeightSlider:SetMinMaxValues(10, 70)
 	minHeightSlider:SetValueStep(1)
-	minHeightSlider:SetValue((DeathLoggerDB.minHeight) / screenHeight * 100)
+	minHeightSlider:SetValue((DeathLoggerDB.minHeight or 100) / screenHeight * 100)
 	minHeightSlider.tooltipText = "Установите минимальную высоту окна в процентах от высоты экрана (макс. 70%)"
 	minHeightSlider.Low:SetText("10%")
 	minHeightSlider.High:SetText("70%")
 	minHeightSlider.Text = minHeightSlider:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	minHeightSlider.Text:SetPoint("TOP", minHeightSlider, "BOTTOM", 0, -5)
-	minHeightSlider.Text:SetText(math.floor((DeathLoggerDB.minHeight) / screenHeight * 100) .. "%")
+	minHeightSlider.Text:SetText(math.floor((DeathLoggerDB.minHeight or 100) / screenHeight * 100) .. "%")
 
 	minHeightSlider:SetScript("OnValueChanged", function(self, value)
 		local percent = math.floor(value)
 		self.Text:SetText(percent .. "%")
 		DeathLoggerDB.minHeight = screenHeight * percent / 100
-		DeathLoggerDB.height = DeathLoggerDB.minHeight  -- Сохраняем текущую высоту
+		DeathLoggerDB.height = DeathLoggerDB.minHeight
 		if widgetInstance then
 			widgetInstance.mainWnd:SetMinResize(DeathLoggerDB.minWidth, DeathLoggerDB.minHeight)
 			widgetInstance.mainWnd:SetMaxResize(maxWidth, maxHeight)
@@ -877,20 +904,15 @@ local function CreateOptionsPanel()
         local memoryUsageMB = memoryUsage / 1024
         memoryValue:SetText(string.format("%.2f MB", memoryUsageMB))
     end
-
     panel:SetScript("OnShow", UpdateMemoryUsage)
-
-    -- local refreshButton = CreateFrame("Button", nil, panel, "GameMenuButtonTemplate")
-    -- refreshButton:SetSize(120, 22)
-    -- refreshButton:SetPoint("TOPLEFT", memoryLabel, "BOTTOMLEFT", 0, -10)
-    -- refreshButton:SetText("Обновить память")
-    -- refreshButton:SetScript("OnClick", UpdateMemoryUsage)
-
 	InterfaceOptions_AddCategory(panel)
 end
 
 local function OnReady(self, event, arg1, ...)
     if event == "ADDON_LOADED" and arg1 == "DeathLogger" then
+	
+		RegisterAddonMessagePrefix("HC_Addon_death")
+		
         self:UnregisterEvent("ADDON_LOADED")
         self:RegisterEvent("CHAT_MSG_ADDON")
         self:SetScript("OnEvent", OnEvent)
@@ -934,20 +956,52 @@ local function OnReady(self, event, arg1, ...)
 end
 
 local function OnEvent(self, event, ...)
-    if event == "ADDON_LOADED" and ... == "DeathLogger" then
-        OnReady(self, event, ...)
+    if event == "ADDON_LOADED" then
+        local addonName = ...
+        if addonName == "DeathLogger" then
+            self:UnregisterEvent("ADDON_LOADED")
+
+            DeathLoggerDB = DeathLoggerDB or {}
+            DeathLoggerDB.entries = DeathLoggerDB.entries or {}
+            DeathLoggerDB.guildOnly = DeathLoggerDB.guildOnly or false
+            DeathLoggerDB.isShown = DeathLoggerDB.isShown or false
+
+            if not widgetInstance then
+                widgetInstance = DeathLogWidget.new()
+            end
+            if DeathLoggerDB.isShown then
+				widgetInstance:Show()
+			else
+				widgetInstance:Hide()
+			end
+
+            LoadEntries()
+            initMinimapButton()
+            CreateOptionsPanel()
+            print("|cFF00FF00Death Logger|r успешно загружен.")
+        end
+    elseif event == "PLAYER_LOGIN" then
+        -- JoinGlobalChannel()
+
+	elseif event == "CHAT_MSG_SYSTEM" then
+		local msg = ...
+			if msg:find("Не удалось присоединиться") then
+			print("|cFFFF0000[AutoJoin]|r Ошибка: неверное имя/пароль")
+		end
     elseif event == "CHAT_MSG_ADDON" then
-        local prefix, text = ...
+        local prefix, text, _, sender = ...
         if prefix == "ASMSG_HARDCORE_DEATH" then
             OnDeath(text)
         elseif prefix == "ASMSG_HARDCORE_COMPLETE" then
             OnComplete(text)
+		elseif prefix == "HC_Addon_death" then
         end
-	elseif event == "CHAT_MSG_SYSTEM" then
-        local message = ...
-        if message:find("присоединился к гильдии") or message:find("покинул гильдию") then
-            GuildRoster()
-        end
+
+    elseif event == "GUILD_ROSTER_UPDATE" then
+		GuildRoster()
+    elseif event == "PLAYER_LOGOUT" then
+        SaveSettingsOnLogout()
+        SaveEntriesOnLogout()
     end
 end
 
@@ -956,15 +1010,8 @@ SlashCmdList["DEATHLOGGER"] = SlashCommandHandle
 
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
-frame:RegisterEvent("PLAYER_LOGOUT")
+frame:RegisterEvent("CHAT_MSG_ADDON")
 frame:RegisterEvent("GUILD_ROSTER_UPDATE")
-
-frame:SetScript("OnEvent", function(self, event, ...)
-    if event == "ADDON_LOADED" and ... == "DeathLogger" then
-        OnReady(self, event, ...)
-    elseif event == "PLAYER_LOGOUT" then
-        SaveSettingsOnLogout()
-    else
-        OnEvent(self, event, ...)
-    end
-end)
+frame:RegisterEvent("PLAYER_LOGIN")
+frame:RegisterEvent("PLAYER_LOGOUT")
+frame:SetScript("OnEvent", OnEvent)
