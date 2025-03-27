@@ -1,13 +1,14 @@
 ## Interface: 30300
 ## Title: Death Logger
-## Notes: Logs deaths on a hardcore server
+## Notes: Logs deaths on a Sirus hardcore server 
 ## Author: github.com/LyubimovVladislav
-## With addition by Norzia devilicip2@gmail.com for Sirius-wow
-## Version: 1.2
+## With addition by Norzia devilicip2@gmail.com for Sirus-wow
+## Version: 1.3
 ## SavedVariables: DeathLoggerDB
 
 Libs\LibStub\LibStub.lua
 Libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
 Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
 Libs\LibDBIcon-1.0\LibDBIcon-1.0\LibDBIcon-1.0.lua
+DeathLogger_Utils.lua
 DeathLogger.lua

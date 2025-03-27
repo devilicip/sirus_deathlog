@@ -1,4 +1,4 @@
-## Interface: 30100
+## Interface: 30300
 ## Title: Lib: DataBrokerIcon-1.0
 ## Notes: Allows addons to register to recieve a lightweight minimap icon as an alternative to more heavy LDB displays.
 ## Author: Rabbit
