@@ -22,6 +22,9 @@ local addonName = "DeathLogger"
 
 local Utils = {}
 
+local isRequestActive = false
+Utils.guildCache = {} -- Кэш для хранения гильдий игроков
+
 Utils.classes = {
     [1] = "Воин",
     [2] = "Паладин",
@@ -39,7 +42,9 @@ Utils.alliances = {
     [0] = "Орда",
     [1] = "Альянс",
     [2] = "Нейтрал",
-    [3] = "Неопределено"
+    [3] = "Неопределено",
+	["Horde"] = "Орда",
+    ["Alliance"] = "Альянс"
 }
 
 Utils.races = {
