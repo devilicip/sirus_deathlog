@@ -19,27 +19,31 @@
 -------------------------------------------------------------------------------------------------
 
 local addonName = "DeathLogger"
+local wholib = LibStub and LibStub("LibWho-2.0", true) and LibStub("LibWho-2.0"):Library()
+local useLibWho = wholib ~= nil
 
 local Utils = _G[addonName.."_Utils"] or {}
 if not next(Utils) then
 	error("|cFFFF0000Не удалось загрузить DeathLogger_Utils.lua!|r")
 end
 
+local DEBUG = false
+local function Debug(...)
+    if DEBUG then
+        print("|cff00ccff[DEBUG]|r " .. strjoin(" ", tostringall(...)))
+    end
+end
+Debug("LibWho status:", wholib and "LOADED" or "MISSING")
 local DeathLogWidget = {}
 local guildMembers = {}
 local isManualGuildRequest = false
-DeathLogWidget.__index = DeathLogWidget
-DeathLoggerDB = DeathLoggerDB or {}
-DeathLoggerDB.entries = DeathLoggerDB.entries or {}
 local widgetInstance = nil
 local isFullWindow = false
 local lastRequestedPlayer = nil
-
-local DeathLoggerTooltip = CreateFrame("GameTooltip", "DeathLoggerTooltip", UIParent, "SharedTooltipTemplate")
-local DeathLog_L = {
-	minimap_btn_left_click = "Left-click to open/close log",
-	minimap_btn_right_click = "Right-click to open menu",
-}
+local pendingRequest = nil
+DeathLogWidget.__index = DeathLogWidget
+DeathLoggerDB = DeathLoggerDB or {}
+DeathLoggerDB.entries = DeathLoggerDB.entries or {}
 
 local function SaveFramePositionAndSize(frame)
     if frame == widgetInstance.mainWnd then
@@ -52,6 +56,12 @@ local function SaveFramePositionAndSize(frame)
         DeathLoggerDB.height = frame:GetHeight()
     end
 end
+
+local DeathLoggerTooltip = CreateFrame("GameTooltip", "DeathLoggerTooltip", UIParent, "SharedTooltipTemplate")
+local DeathLog_L = {
+	minimap_btn_left_click = "Left-click to open/close log",
+	minimap_btn_right_click = "Right-click to open menu",
+}
 
 local function ShowTooltip(self)
 	DeathLoggerTooltip:SetOwner(self, "ANCHOR_TOP")
@@ -121,31 +131,89 @@ local function initMinimapButton()
 	end
 end
 
-
 --
 
 local function RequestPlayerInfo(playerName)
     lastRequestedPlayer = playerName
-    SetWhoToUI(1)
-    FriendsFrame:UnregisterEvent("WHO_LIST_UPDATE")
-    SendWho(playerName)
+    if useLibWho then
+        wholib:Who(playerName)
+    else
+        SetWhoToUI(1)
+        FriendsFrame:UnregisterEvent("WHO_LIST_UPDATE")
+        SendWho(playerName)
+    end
 end
 
 local function ProcessWhoResults()
+    if not pendingRequest then 
+        Debug("WHO_LIST_UPDATE: Нет активного запроса")
+        return 
+    end
+    
+    Debug("Обработка WHO для:", pendingRequest)
     parseGuild = ""
-    for i = 1, GetNumWhoResults() do
-        local name, guild = GetWhoInfo(i)
-        -- if name and strlower(name) == strlower(lastRequestedPlayer) then
-        if name and name ~= "" and strlower(name) == strlower(lastRequestedPlayer) then
-            parseGuild = guild or ""
-            if isManualGuildRequest then
-				parseGuild = guild
-                print("Имя: |cFFFF3388"..name.."|r Гильдия: |cFF77FF11"..parseGuild.."|r")
+    local name, guild, lvl, _, _, zone
+    
+    if useLibWho and wholib.GetWhoInfo then
+        local info = {wholib:GetWhoInfo(1)}
+        if info[1] then
+            name, guild, lvl, _, _, zone = unpack(info)
+			parseGuild = guild or ""
+        end
+    else
+        for i = 1, GetNumWhoResults() do
+            name, guild, lvl, _, _, zone = GetWhoInfo(i)
+			parseGuild = guild or ""
+            if name and name:lower() == pendingRequest:lower() then
+                break
             end
         end
     end
-    isManualGuildRequest = false
-    FriendsFrame:RegisterEvent("WHO_LIST_UPDATE")
+    
+    if isManualGuildRequest then
+        if name then
+            local guildText = guild ~= "" and "|cffffcc00<"..guild..">|r" or "|cffaaaaaa<без гильдии>|r"
+            local zoneText = zone ~= "" and "|cffaaaaaa("..zone..")|r" or "|cffff0000(оффлайн)|r"
+            print(string.format(
+                "|cff00ccff[Инфо]|r %s: |cff00ff00%d ур.|r %s %s",
+                name,
+                lvl or 0,
+                guildText,
+                zoneText
+            ))
+        else
+            print("|cffff0000[Ошибка]|r Игрок '"..pendingRequest.."' не найден")
+        end
+        isManualGuildRequest = false
+    else
+        if name then
+            parseGuild = guild or ""
+        end
+    end
+    
+    pendingRequest = nil
+end
+
+local original_ChatFrame_OnHyperlinkShow
+local function NewChatFrame_OnHyperlinkShow(frame, link, text, button)
+    if IsShiftKeyDown() and button == "RightButton" then
+	isManualGuildRequest = true
+        local playerName = link:match("player:([^:]+)")
+        if playerName then
+            playerName = playerName:gsub("-%S+$", "")
+            pendingRequest = playerName
+            
+            if useLibWho then
+                wholib:Who(playerName)
+            else
+                SetWhoToUI(1)
+                SendWho(playerName)
+            end
+            
+            return
+        end
+    end
+    return original_ChatFrame_OnHyperlinkShow(frame, link, text, button)
 end
 
 --
@@ -170,6 +238,7 @@ local function FormatData(data)
 	else
 		rawGuild = "|cffffcc00<"..parseGuild..">|r"
 	end
+
     local mainStr = string.format("%s %s %s %s %s %s", timeData, name, coloredRace, level, guildInfo, rawGuild)
     local tooltip = string.format(
         "%s\nИмя: %s\nУровень: %d\nКласс: %s\nРаса: %s\nФракция: %s\nЛокация: %s\nПричина: %s",
@@ -212,7 +281,6 @@ end
 
 function DeathLogWidget.new()
     local instance = setmetatable({}, DeathLogWidget)
-	
     local screenWidth, screenHeight = GetScreenWidth(), GetScreenHeight()
     local minWidth = DeathLoggerDB.minWidth or (screenWidth * 0.5)
     local minHeight = DeathLoggerDB.minHeight or (screenHeight * 0.4)
@@ -492,9 +560,9 @@ function DeathLogWidget:CreateTextFrame()
 	frame:SetScript("OnMouseUp", function(self, button)
 	    if button == "RightButton" and IsShiftKeyDown() then
         if self.playerName then
-            -- /dlguild
+            -- /dlguild /dlinfo
             isManualGuildRequest = true
-            SlashCmdList["DEATHLOGGERGUILD"](self.playerName)
+            SlashCmdList["DEATHLOGGERINFO"](self.playerName)
         else
             print("[DEBUG] Имя игрока не найдено.")
         end
@@ -650,8 +718,9 @@ local function OnDeath(text)
 	if not dataMap.name then
 		return
 	end
-	
-    RequestPlayerInfo(dataMap.name)
+
+	pendingRequest = dataMap.name
+    RequestPlayerInfo(pendingRequest)
 	
     local timerFrame = CreateFrame("Frame")
     local elapsedTime = 0
@@ -681,8 +750,9 @@ local function OnComplete(text)
 	if not dataMap.name then
 		return
 	end
-	
-    RequestPlayerInfo(dataMap.name)
+	    
+	pendingRequest = dataMap.name
+    RequestPlayerInfo(pendingRequest)
 	
     local timerFrame = CreateFrame("Frame")
     local elapsedTime = 0
@@ -696,7 +766,6 @@ local function OnComplete(text)
 			if widgetInstance then
 				widgetInstance:AddEntry(challengeCompletedData, tooltip, faction, playerName, parseGuild)
 				widgetInstance:UpdateEntriesPosition()
-
 			end
 	
 			SaveEntry(challengeCompletedData, tooltip, faction, playerName, parseGuild)
@@ -729,14 +798,15 @@ SlashCmdList["DEATHLOGGER"] = function(input)
     end
 end
 
-SlashCmdList["DEATHLOGGERGUILD"] = function(input)
-    local playerNameGuild = strtrim(input)
-    if playerNameGuild == "" then
-        print("|cFF00FF00Death Logger|r: Использование: /dlguild <имя игрока>")
+SlashCmdList["DEATHLOGGERINFO"] = function(input)
+    local playerName = strtrim(input)
+    if playerName == "" then
+        print("|cFF00FF00Death Logger|r: Использование: /dlinfo или /dlguild <имя игрока>")
         return
     end
-	isManualGuildRequest = true
-    RequestPlayerInfo(playerNameGuild)
+    isManualGuildRequest = true
+    pendingRequest = playerName:gsub("-%S+$", "")
+    RequestPlayerInfo(pendingRequest)
 end
 
 local function SaveEntriesOnLogout()
@@ -884,16 +954,12 @@ local function CreateOptionsPanel()
 	InterfaceOptions_AddCategory(panel)
 end
 
-local function OnReady(self, event, arg1, ...)
-	if event == "ADDON_LOADED" and arg1 == "DeathLogger" then
-		self:SetScript("OnEvent", OnEvent)
-	end
-end
-
 local function OnEvent(self, event, ...)
 	if event == "ADDON_LOADED" then
 		local addonName = ...
 		if addonName == "DeathLogger" then
+		    original_ChatFrame_OnHyperlinkShow = ChatFrame_OnHyperlinkShow
+			ChatFrame_OnHyperlinkShow = NewChatFrame_OnHyperlinkShow
 			self:UnregisterEvent("ADDON_LOADED")
 
 			DeathLoggerDB = DeathLoggerDB or {}
@@ -949,7 +1015,7 @@ local function OnEvent(self, event, ...)
 end
 
 SLASH_DEATHLOGGER1, SLASH_DEATHLOGGER2 = "/deathlog", "/dl"
-SLASH_DEATHLOGGERGUILD1 = "/dlguild"
+SLASH_DEATHLOGGERINFO1, SLASH_DEATHLOGGERINFO2 = "/dlinfo", "/dlguild"
 
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
