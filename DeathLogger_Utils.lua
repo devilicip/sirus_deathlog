@@ -1,6 +1,6 @@
 -------------------------------------------------------------------------------------------------
 -- Copyright 2024-2025 Lyubimov Vladislav (grifon7676@gmail.com)
--- With addition by Norzia (devilicip2@gmail.com) for sirus-wow
+-- Copyright 2025 Norzia (devilicip2@gmail.com) for sirus-wow
 --
 -- Permission is hereby granted, free of charge, to any person obtaining a copy of this software
 -- and associated documentation files (the “Software”), to deal in the Software without
@@ -23,7 +23,7 @@ local addonName = "DeathLogger"
 local Utils = {}
 
 local isRequestActive = false
-Utils.guildCache = {} -- Кэш для хранения гильдий игроков
+Utils.guildCache = {}
 
 Utils.classes = {
     [1] = "Воин",
@@ -136,15 +136,29 @@ function Utils.ExtractName(str)
     return name
 end
 
+-- function Utils.StringToMap(str)
+    -- local tbl = {}
+    -- local keys = { "name", "raceID", "sideID", "classID", "level", "locationStr", "causeID", "enemyName", "enemyLevel" }
+    -- local index = 1
+    -- for str in string.gmatch(str, "[^:]+") do
+        -- tbl[keys[index]] = tonumber(str) or str
+        -- index = index + 1
+    -- end
+    -- tbl.name = Utils.ExtractName(str)
+    -- return tbl
+-- end
+
 function Utils.StringToMap(str)
     local tbl = {}
     local keys = { "name", "raceID", "sideID", "classID", "level", "locationStr", "causeID", "enemyName", "enemyLevel" }
     local index = 1
-    for str in string.gmatch(str, "[^:]+") do
-        tbl[keys[index]] = tonumber(str) or str
+    for strPart in string.gmatch(str, "[^:]+") do
+        tbl[keys[index]] = tonumber(strPart) or strPart
         index = index + 1
+        if index > #keys then break end  -- сейв от переполнения
     end
-    tbl.name = Utils.ExtractName(str)
+	tbl.name = Utils.ExtractName(str)
+    tbl.causeID = tbl.causeID or 0
     return tbl
 end
 
@@ -180,6 +194,26 @@ function Utils.IsPlayerInGuild(targetName)
     return false
 end
 
-_G[addonName.."_Utils"] = Utils
+function Utils.TablesEqual(t1, t2)
+    if #t1 ~= #t2 then return false end
+    for i = 1, #t1 do
+        if t1[i] ~= t2[i] then
+            return false
+        end
+    end
+    return true
+end
 
--- return Utils
+function Utils.CopyTable(src, dst)
+    dst = dst or {}
+    for k, v in pairs(src) do
+        if type(v) == "table" then
+            dst[k] = Utils.CopyTable(v, dst[k])
+        elseif dst[k] == nil then
+            dst[k] = v
+        end
+    end
+    return dst
+end
+
+_G[addonName.."_Utils"] = Utils
