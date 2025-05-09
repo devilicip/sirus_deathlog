@@ -22,11 +22,9 @@ local Utils = _G[addonName.."_Utils"] or {}
 if not _G.DeathLoggerDB then
     _G.DeathLoggerDB = {}
 end
-
 local HCBL_Settings = _G.DeathLoggerDB.HCBL_Settings or {}
 _G.DeathLoggerDB.HCBL_Settings = HCBL_Settings
 local iconSize = 44
-
 local ICON_BASE_PATH = "Interface\\AddOns\\DeathLogger\\Icons\\" 
 _G.deathIcons = {}
 for i = 0, 11 do
@@ -48,7 +46,7 @@ local defaults = {
     fontShadow = true,
     fontStyle = "NORMAL",
     scaleFactor = 1.0,
-    dl_ver = 1.481
+    dl_ver = 1.483
 }
 
 local isConfigOpen = false
@@ -62,7 +60,7 @@ local function UpdateBannerElements()
 
     if HCBL_Settings.hideOriginal then
         HardcoreLossBanner:Hide()
-        return -- Прекращаем дальнейшие обновления, если баннер скрыт
+        return
     end
 	
     HCBL_Settings.fontColor = HCBL_Settings.fontColor or defaults.fontColor
@@ -71,7 +69,7 @@ local function UpdateBannerElements()
     HCBL_Settings.fontOutline = HCBL_Settings.fontOutline or defaults.fontOutline
 
     if HardcoreLossBanner and HardcoreLossBanner.Title then
-	        HCBL_Settings.fontColor = HCBL_Settings.fontColor or {r=1, g=1, b=1, a=1}
+	    HCBL_Settings.fontColor = HCBL_Settings.fontColor or {r=1, g=1, b=1, a=1}
 
         local fontPath = string.format("Fonts\\%s.ttf", HCBL_Settings.fontName or defaults.fontName)
         HardcoreLossBanner.Title:SetFont(fontPath, HCBL_Settings.fontSize or defaults.fontSize, HCBL_Settings.fontOutline or defaults.fontOutline)
@@ -89,7 +87,7 @@ local function UpdateBannerElements()
         HardcoreLossBanner.Title:SetShadowColor(0, 0, 0, HCBL_Settings.fontShadow and 1 or 0)
         HardcoreLossBanner.Title:SetShadowOffset(1, -1)
     end
-		if not HardcoreLossBanner.CustomDeathIcon then
+	if not HardcoreLossBanner.CustomDeathIcon then
 		HardcoreLossBanner.CustomDeathIcon = HardcoreLossBanner:CreateTexture(nil, "OVERLAY", nil, 7)
 		HardcoreLossBanner.CustomDeathIcon:SetSize(iconSize, iconSize)
 		HardcoreLossBanner.CustomDeathIcon:SetPoint("CENTER", HardcoreLossBanner.SkullCircle, "CENTER", 0, 0)
@@ -113,7 +111,7 @@ local function UpdateBannerElements()
         HardcoreLossBanner.CustomDeathIcon:SetTexture(icon)
         HardcoreLossBanner.CustomDeathIcon:Show()
         HardcoreLossBanner.SkullCircle:SetAlpha(0)
-        -- print("Иконка установлена:", icon)
+        -- print("Иконка :", icon)
     else
         HardcoreLossBanner.CustomDeathIcon:Hide()
         HardcoreLossBanner.SkullCircle:SetAlpha(1)
@@ -140,7 +138,6 @@ end
 local function SetupBannerMovement(banner)
     banner:SetMovable(true)
     banner:EnableMouse(true)
-
     banner:SetScript("OnMouseDown", function(self, button)
         if isConfigOpen and button == "LeftButton" and HCBL_Settings.moveOriginal then
             self:StartMoving()
@@ -174,12 +171,21 @@ local function SetupOriginalBanner()
     end
     HCBL_Settings = DeathLoggerDB.HCBL_Settings
 
+    if HardcoreLossBanner and not HardcoreLossBanner.originalShow then
+        HardcoreLossBanner.originalShow = HardcoreLossBanner.Show
+        HardcoreLossBanner.Show = function(self, ...)
+            if HCBL_Settings.hideOriginal then
+                return
+            end
+            self:originalShow(...)
+        end
+    end
+
     if HardcoreLossBanner then
         UpdateBannerPosition()
         SetupBannerMovement(HardcoreLossBanner)
         UpdateBannerElements()
 
-        -- Основная проверка: если hideOriginal активен, баннер всегда скрыт
         if HCBL_Settings.hideOriginal then
             HardcoreLossBanner:Hide()
             HCBL_Settings.moveOriginal = false
@@ -187,7 +193,6 @@ local function SetupOriginalBanner()
                 positionCheckbox:SetChecked(false)
             end
         else
-            -- В противном случае, видимость зависит от moveOriginal и isConfigOpen
             HardcoreLossBanner:SetShown(isConfigOpen and HCBL_Settings.moveOriginal)
         end
     end
@@ -305,17 +310,24 @@ local function CreateOptionsPanel()
     hideCheckbox.text:SetPoint("LEFT", hideCheckbox, "RIGHT", 5, 0)
     hideCheckbox.text:SetText("Убрать оригинальный баннер")
     hideCheckbox:SetChecked(HCBL_Settings.hideOriginal)
-hideCheckbox:SetScript("OnClick", function(self)
-    HCBL_Settings.hideOriginal = self:GetChecked()
-    DeathLoggerDB.HCBL_Settings = HCBL_Settings
-    -- Принудительно скрываем/показываем баннер
-    if HCBL_Settings.hideOriginal then
-        HardcoreLossBanner:Hide()
-    else
-        HardcoreLossBanner:Show()
-    end
-    SetupOriginalBanner()
-end)
+	hideCheckbox:SetScript("OnClick", function(self)
+		HCBL_Settings.hideOriginal = self:GetChecked()
+		DeathLoggerDB.HCBL_Settings = HCBL_Settings
+    
+		if not HCBL_Settings.hideOriginal then
+			HCBL_Settings.moveOriginal = true
+			if positionCheckbox then
+				positionCheckbox:SetChecked(true)
+			end
+		else
+			HCBL_Settings.moveOriginal = false
+		end
+
+		if HCBL_Settings.hideOriginal and HardcoreLossBanner then
+			HardcoreLossBanner:Hide()
+		end
+		SetupOriginalBanner()
+	end)
 
     -- Чекбокс позиционирования
     local positionCheckbox = CreateFrame("CheckButton", nil, container, "OptionsCheckButtonTemplate")
@@ -325,15 +337,15 @@ end)
     positionCheckbox.text:SetPoint("LEFT", positionCheckbox, "RIGHT", 5, 0)
     positionCheckbox.text:SetText("Разрешить перемещение баннера")
     positionCheckbox:SetChecked(HCBL_Settings.moveOriginal)
-positionCheckbox:SetScript("OnClick", function(self)
-    if HCBL_Settings.hideOriginal then 
-        self:SetChecked(false)
-        return 
-    end
-    HCBL_Settings.moveOriginal = self:GetChecked()
-    DeathLoggerDB.HCBL_Settings = HCBL_Settings
-    SetupOriginalBanner()
-end)
+	positionCheckbox:SetScript("OnClick", function(self)
+		if HCBL_Settings.hideOriginal then 
+			self:SetChecked(false)
+			return 
+		end
+		HCBL_Settings.moveOriginal = self:GetChecked()
+		DeathLoggerDB.HCBL_Settings = HCBL_Settings
+		SetupOriginalBanner()
+	end)
 
 	-- Кнопка черепа
     local skullCheckbox = CreateFrame("CheckButton", nil, container, "OptionsCheckButtonTemplate")
@@ -349,7 +361,7 @@ end)
         UpdateBannerElements()
     end)
 
-    -- Кнопка сброса позиции
+    -- Сброс позиции
     local resetButton = CreateFrame("Button", nil, container, "UIPanelButtonTemplate")
     resetButton:SetPoint("TOPLEFT", skullCheckbox, "BOTTOMLEFT", 0, -30)
     resetButton:SetSize(140, 25)
@@ -400,8 +412,7 @@ end)
 			info.func = function()
 				HCBL_Settings.fontOutline = outline
 				UIDropDownMenu_SetText(outlineDropdown, "Контур: "..outline)
-				    DeathLoggerDB.HCBL_Settings = HCBL_Settings
-
+			    DeathLoggerDB.HCBL_Settings = HCBL_Settings
 				UpdateBannerElements()
 			end
 			UIDropDownMenu_AddButton(info)
@@ -421,8 +432,7 @@ end)
         ColorPickerFrame.func = function()
             HCBL_Settings.fontColor.r, HCBL_Settings.fontColor.g, HCBL_Settings.fontColor.b = ColorPickerFrame:GetColorRGB()
             HCBL_Settings.fontColor.a = OpacitySliderFrame:GetValue()
-			    DeathLoggerDB.HCBL_Settings = HCBL_Settings
-
+			DeathLoggerDB.HCBL_Settings = HCBL_Settings
             UpdateBannerElements()
         end
         ColorPickerFrame:Show()
@@ -474,25 +484,20 @@ end)
     	SetupOriginalBanner()
 	end)
     
-panel:SetScript("OnHide", function()
-    isConfigOpen = false
-    HCBL_Settings.showOriginalForPositioning = false
-
-    -- Принудительно скрываем баннер, если опция hideOriginal активна
-    if HCBL_Settings.hideOriginal then
-        HardcoreLossBanner:Hide()
-    end
-
-    SetupOriginalBanner()
-    CloseDropDownMenus()
-
-    if UIDROPDOWNMENU_OPEN_MENU then
-        if UIDROPDOWNMENU_OPEN_MENU == HCBLFontDropdown or 
-           UIDROPDOWNMENU_OPEN_MENU == HCBLOutlineDropdown then
+	panel:SetScript("OnHide", function()
+		isConfigOpen = false
+		HCBL_Settings.showOriginalForPositioning = false
+		SetupOriginalBanner()
+		CloseDropDownMenus()
+	
+		if UIDROPDOWNMENU_OPEN_MENU then
+			if UIDROPDOWNMENU_OPEN_MENU == HCBLFontDropdown or 
+			UIDROPDOWNMENU_OPEN_MENU == HCBLOutlineDropdown then
             CloseDropDownMenus()
-        end
-    end
-end)
+			end
+		end
+		CloseDropDownMenus()
+	end)
 
 	InterfaceOptions_AddCategory(panel)
 end

@@ -247,7 +247,7 @@ end
     -- end
 -- end
 
-local function UpdateGuildMembers() -- проверка только из онлайна5к6ьт  
+local function UpdateGuildMembers() -- проверка только из онлайна  
     if not IsInGuild() then 
         guildMembers = {}
         return 
@@ -313,9 +313,9 @@ local function FormatData(data)
     if data.causeID == 7 then
         tooltip = tooltip .. "\nОт: " .. data.enemyName .. " " .. data.enemyLevel .. "-го уровня"
     end
-    if Utils.IsPlayerInGuild(data.name) then
-        tooltip = tooltip .. "\n|cFF00FF00Член гильдии|r"
-    end
+    -- if Utils.IsPlayerInGuild(data.name) then
+        -- tooltip = tooltip .. "\n|cFF00FF00Член гильдии|r"
+    -- end
     return mainStr, tooltip, data.name
 end
 
@@ -338,9 +338,9 @@ local function FormatCompletedChallengeData(data)
 	local mainStr = string.format("%s %s %s %s %s %s", timeData, name, coloredRace, Utils.ColorWord("завершил испытание!", "Золотой"), guildInfo, rawGuild)
 	local tooltip = string.format("%s\nИмя: %s\nКласс: %s\nРаса: %s\nФракция: %s\nГильдия: %s",
 		Utils.ColorWord("Пройден", "Зеленый"), data.name, Utils.classes[data.classID], race, side, parseGuild)
-	if Utils.IsPlayerInGuild(data.name) then
-		tooltip = tooltip .. "\n|cFF00FF00Член гильдии|r"
-	end
+	-- if Utils.IsPlayerInGuild(data.name) then
+		-- tooltip = tooltip .. "\n|cFF00FF00Член гильдии|r"
+	-- end
 	return mainStr, tooltip, data.name
 end
 
@@ -810,7 +810,6 @@ local function OnDeath(text)
 	pendingRequest = dataMap.name
     RequestPlayerInfo(pendingRequest)
 
-    local dataMap = Utils.StringToMap(text)
     local causeID = dataMap.causeID or 0
 
     if causeID < 0 or causeID > 11 then
@@ -861,7 +860,6 @@ local function OnComplete(text)
 	pendingRequest = dataMap.name
     RequestPlayerInfo(pendingRequest)
 
-    local dataMap = Utils.StringToMap(text)
     local causeID = 11
 
 
@@ -950,7 +948,7 @@ end
 local function LoadEntries()
     if DeathLoggerDB.entries and widgetInstance then
         local totalEntries = #DeathLoggerDB.entries
-        local maxEntriesToLoad = math.min(totalEntries, 1000)
+        local maxEntriesToLoad = math.min(totalEntries, 777)
         for i = maxEntriesToLoad, 1, -1 do
             local entryData = DeathLoggerDB.entries[i]
             widgetInstance:AddEntry(entryData.data, entryData.tooltip, entryData.faction, entryData.playerName, entryData.parseGuild)
