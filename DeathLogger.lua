@@ -36,10 +36,15 @@ end
 Debug("LibWho status:", wholib and "LOADED" or "MISSING")
 
 local Utils = _G[addonName.."_Utils"] or {}
+local Stats = _G[addonName.."_Stats"] or {}
 if not next(Utils) then
 	error("|cFFFF0000Не удалось загрузить DeathLogger_Utils.lua!|r")
 end
-
+if not next(Stats) then
+	error("|cFFFF0000Не удалось загрузить DeathLogger_Stats.lua!|r")
+elseif DEBUG then
+    print("|cFF00FF00Death Logger|r: Модуль статистики загружен")
+end
 local Options = {}
 local defaults = {}
 local guildMembers = {}
@@ -56,15 +61,121 @@ local lastRequestedPlayer = nil
 local pendingRequest = nil
 local DeathLogWidget = {}
 DeathLogWidget.__index = DeathLogWidget
-DeathLoggerDB = DeathLoggerDB or {}
+_G.DeathLoggerDB = DeathLoggerDB or {}
 DeathLoggerDB.entries = DeathLoggerDB.entries or {}
 parseGuild = ""
+local deathOverlayFrames = {}
+DeathLoggerDB.announceDeathToGuild = DeathLoggerDB.announceDeathToGuild or true
+local DL_EdgeGlow = nil
+local DL_EdgeGlowSettings = {
+    edgeThickness = 8,
+    fadeInDuration = 0.3,
+    fadeOutDuration = 0.7,
+    holdDuration = 0.5,
+    flashCount = 2,
+    flashDelay = 0.1
+}
 
 --
 
+local function CreateEdgeGlow()
+    if DL_EdgeGlow then return DL_EdgeGlow end
+    
+    DL_EdgeGlow = CreateFrame("Frame", "DL_EdgeGlow", UIParent)
+    DL_EdgeGlow:SetAllPoints()
+    DL_EdgeGlow:SetFrameStrata("FULLSCREEN_DIALOG")
+    DL_EdgeGlow:Hide()
+    local edges = {}
+    for i = 1, 4 do
+        edges[i] = DL_EdgeGlow:CreateTexture(nil, "BACKGROUND")
+		-- edges[i]:SetTexture(1,0,0)
+        edges[i]:SetTexture("Interface\\Buttons\\WHITE8X8")
+        edges[i]:SetAlpha(0)
+    end
+    
+    edges[1]:SetPoint("TOPLEFT", DL_EdgeGlow, "TOPLEFT", 0, 0)
+    edges[1]:SetPoint("TOPRIGHT", DL_EdgeGlow, "TOPRIGHT", 0, 0)
+    edges[1]:SetHeight(DL_EdgeGlowSettings.edgeThickness)
+    edges[2]:SetPoint("BOTTOMLEFT", DL_EdgeGlow, "BOTTOMLEFT", 0, 0)
+    edges[2]:SetPoint("BOTTOMRIGHT", DL_EdgeGlow, "BOTTOMRIGHT", 0, 0)
+    edges[2]:SetHeight(DL_EdgeGlowSettings.edgeThickness)
+    edges[3]:SetPoint("TOPLEFT", DL_EdgeGlow, "TOPLEFT", 0, -DL_EdgeGlowSettings.edgeThickness)
+    edges[3]:SetPoint("BOTTOMLEFT", DL_EdgeGlow, "BOTTOMLEFT", 0, DL_EdgeGlowSettings.edgeThickness)
+    edges[3]:SetWidth(DL_EdgeGlowSettings.edgeThickness)
+    edges[4]:SetPoint("TOPRIGHT", DL_EdgeGlow, "TOPRIGHT", 0, -DL_EdgeGlowSettings.edgeThickness)
+    edges[4]:SetPoint("BOTTOMRIGHT", DL_EdgeGlow, "BOTTOMRIGHT", 0, DL_EdgeGlowSettings.edgeThickness)
+    edges[4]:SetWidth(DL_EdgeGlowSettings.edgeThickness)
+    
+    DL_EdgeGlow.edges = edges
+    return DL_EdgeGlow
+end
+
+local function ShowEdgeGlow(color)
+    local glow = CreateEdgeGlow()
+    local settings = DL_EdgeGlowSettings
+    local flashColor = color or { r = 1, g = 0, b = 0, a = 0.7 }
+    
+    for i = 1, 4 do
+        glow.edges[i]:SetTexture(flashColor.r, flashColor.g, flashColor.b, flashColor.a)
+        glow.edges[i]:SetAlpha(0)
+    end
+    
+    local flashCount = settings.flashCount
+    local startTime = GetTime()
+    local isFadingIn = true
+    local isHolding = false
+    
+    glow:SetScript("OnUpdate", function(self, elapsed)
+        local currentTime = GetTime() - startTime
+        local progress
+        
+        if isFadingIn then
+            progress = currentTime / settings.fadeInDuration
+            if progress >= 1 then
+                progress = 1
+                isFadingIn = false
+                startTime = GetTime()
+                isHolding = true
+            end
+            for i = 1, 4 do
+                self.edges[i]:SetAlpha(progress * flashColor.a)
+            end
+        elseif isHolding then
+            if currentTime >= settings.holdDuration then
+                isHolding = false
+                startTime = GetTime()
+            end
+        else
+            progress = 1 - (currentTime / settings.fadeOutDuration)
+            if progress <= 0 then
+                progress = 0
+                flashCount = flashCount - 1
+                if flashCount > 0 then
+                    startTime = GetTime() + settings.flashDelay
+                    isFadingIn = true
+                else
+                    self:SetScript("OnUpdate", nil)
+                    self:Hide()
+                end
+            end
+            for i = 1, 4 do
+                self.edges[i]:SetAlpha(progress * flashColor.a)
+            end
+        end
+    end)
+    
+    glow:Show()
+end
+
+function ShowDeathOverlay(color)
+    local flashColor = (HCBL_Settings and HCBL_Settings.fontColor) or color or { r = 1, g = 0, b = 0, a = 0.7 }
+    ShowEdgeGlow(flashColor)
+end
+
+--
 local function SaveFramePositionAndSize(frame)
     if frame == widgetInstance.mainWnd then
-        local point, relativeTo, relativePoint, xOfs, yOfs = frame:GetPoint()
+        local point, _, relativePoint, xOfs, yOfs = frame:GetPoint()
         DeathLoggerDB.point = point
         DeathLoggerDB.relativePoint = relativePoint
         DeathLoggerDB.xOfs = xOfs
@@ -121,7 +232,6 @@ DeathLog_minimap_button.OnTooltipShow = function(tooltip)
 	UpdateAddOnMemoryUsage()
 	local memoryUsage = GetAddOnMemoryUsage(addonName)
 	local memoryUsageMB = memoryUsage / 1024
-
 	tooltip:AddLine(addonName)
 	tooltip:AddLine(DeathLog_L.minimap_btn_left_click)
 	tooltip:AddLine(DeathLog_L.minimap_btn_right_click)
@@ -144,7 +254,7 @@ local function initMinimapButton()
 			DeathLog_minimap_button_stub:Show(addonName)
 		end
 	else
-		print("LibDBIcon-1.0 не загружена. Иконка на миникарте не будет отображаться.")
+		print("LibDBIcon-1.0 не загружена. Иконка на миникарте не будет отображаться")
 	end
 end
 
@@ -165,7 +275,7 @@ local function ProcessWhoResults()
             if result and strlower(result) == strlower(pendingRequest) then
                 name = result
                 guild = select(2, GetWhoInfo(i)) or ""
-				    Debug("Обработка useLibWho")
+				    Debug("Обработан useLibWho", name, " Гильдия", guild)
                 break
             end
         end
@@ -174,7 +284,7 @@ local function ProcessWhoResults()
             name, guild = GetWhoInfo(i)
             if name and strlower(name) == strlower(pendingRequest) then
                 guild = guild or ""
-				    Debug("Обработка GetWhoInfo")
+				    Debug("Обработан GetWhoInfo", name, " Гильдия", guild)
                 break
             end
         end
@@ -298,6 +408,9 @@ local function FormatData(data)
 	local guildInfo = ""
 	if Utils.IsPlayerInGuild(data.name) then
 		guildInfo = " |cFF00FF00[Гильдия]|r"
+		Debug("Плашка [Гильдия] установлена (Death)")
+        ShowDeathOverlay(HCBL_Settings and HCBL_Settings.fontColor)
+		Debug("[Флеш окно] Событие смерти игрока из гильдии")
 	end
 	local rawGuild = ""
 	if parseGuild == nil or parseGuild == "" then
@@ -305,7 +418,7 @@ local function FormatData(data)
 	else
 		rawGuild = "|cffffcc00<"..parseGuild..">|r"
 	end
-	Debug("Обработка FormatData")
+	Debug("Обработка FormatData (Death)")
     local mainStr = string.format("%s %s %s %s %s %s", timeData, name, coloredRace, level, guildInfo, rawGuild)
     local tooltip = string.format(
         "%s\nИмя: %s\nУровень: %d\nКласс: %s\nРаса: %s\nФракция: %s\nЛокация: %s\nГильдия: %s\nПричина: %s",
@@ -313,20 +426,18 @@ local function FormatData(data)
     if data.causeID == 7 then
         tooltip = tooltip .. "\nОт: " .. data.enemyName .. " " .. data.enemyLevel .. "-го уровня"
     end
-    -- if Utils.IsPlayerInGuild(data.name) then
-        -- tooltip = tooltip .. "\n|cFF00FF00Член гильдии|r"
-    -- end
-    return mainStr, tooltip, data.name
+    local class = Utils.classes[data.classID] or "Unknown" 
+    return mainStr, tooltip, data.name, class 
 end
 
 local function FormatCompletedChallengeData(data)
 	local timeData = Utils.ColorWord("[" .. Utils.TimeNow() .. "]", "Золотой")
 	local name = Utils.ColorWord(data.name, Utils.classes[data.classID])
 	local coloredRace, race, side = Utils.GetRaceData(data.raceID)
-
 	local guildInfo = ""
 	if Utils.IsPlayerInGuild(data.name) then
 		guildInfo = " |cFF00FF00[Гильдия]|r"
+		Debug("Плашка [Гильдия] установлена (Complete)")
 	end
 	local rawGuild = ""
 	if parseGuild == nil or parseGuild == "" then
@@ -334,13 +445,10 @@ local function FormatCompletedChallengeData(data)
 	else
 		rawGuild = "|cffffcc00<"..parseGuild..">|r"
 	end
-
+	Debug("Обработка FormatCompletedChallengeDataData")
 	local mainStr = string.format("%s %s %s %s %s %s", timeData, name, coloredRace, Utils.ColorWord("завершил испытание!", "Золотой"), guildInfo, rawGuild)
 	local tooltip = string.format("%s\nИмя: %s\nКласс: %s\nРаса: %s\nФракция: %s\nГильдия: %s",
 		Utils.ColorWord("Пройден", "Зеленый"), data.name, Utils.classes[data.classID], race, side, parseGuild)
-	-- if Utils.IsPlayerInGuild(data.name) then
-		-- tooltip = tooltip .. "\n|cFF00FF00Член гильдии|r"
-	-- end
 	return mainStr, tooltip, data.name
 end
 
@@ -359,19 +467,34 @@ function DeathLogWidget.new()
     local minHeightStat = screenHeight * 0.4
     local maxWidthStat = screenWidth * 0.8
     local maxHeightStat = screenHeight * 0.7
+	local statsWidth = screenWidth * 0.8
+    local statsHeight = screenHeight * 0.65
 	local initialWidthStat = screenWidth * 0.6
     local initialHeightStat = screenHeight * 0.5
     local FULL_WINDOW_SPLIT = 0.6
     
-    instance.mainWnd = CreateFrame("Frame", "DLDialogFrame", UIParent)
+    instance.mainWnd = CreateFrame("Frame", "DLDialogFrame_v2", UIParent)
+    instance.mainWnd:SetFrameStrata("DIALOG")
+
     instance.mainWnd:SetSize(initialWidth, initialHeight)
-    instance.mainWnd:SetPoint(
-        DeathLoggerDB.point or "CENTER", 
-        UIParent, 
-        DeathLoggerDB.relativePoint or "CENTER", 
-        DeathLoggerDB.xOfs or 0, 
-        DeathLoggerDB.yOfs or 0
-    )
+	if DeathLoggerDB.point and type(DeathLoggerDB.point) == "table" then
+		instance.mainWnd:SetPoint(
+			DeathLoggerDB.point[1] or "CENTER",
+			UIParent,
+			DeathLoggerDB.point[3] or "CENTER",
+			DeathLoggerDB.point[4] or 0,
+			DeathLoggerDB.point[5] or 0
+		)
+	else
+		instance.mainWnd:SetPoint(
+			DeathLoggerDB.point or "CENTER",
+			UIParent,
+			DeathLoggerDB.relativePoint or "CENTER",
+			DeathLoggerDB.xOfs or 0,
+			DeathLoggerDB.yOfs or 0
+		)
+	end
+	
     instance.mainWnd:SetBackdrop({
         bgFile = "Interface/Tooltips/UI-Tooltip-Background",
         edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
@@ -382,91 +505,47 @@ function DeathLogWidget.new()
     instance.mainWnd.title = instance.mainWnd:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     instance.mainWnd.title:SetPoint("TOPLEFT", 10, -8)
     instance.mainWnd.title:SetText("Death Log")
-    
+	instance.mainWnd:SetScript("OnKeyDown", function(self, key)
+		if key == "ESCAPE" then
+			self:Hide()
+		end
+	end)
+	
     local separator = instance.mainWnd:CreateTexture(nil, "ARTWORK")
     separator:SetTexture(1, 1, 1, 0.5)
     separator:SetHeight(1)
     separator:SetPoint("TOPLEFT", instance.mainWnd.title, "BOTTOMLEFT", 0, -8)
     separator:SetPoint("TOPRIGHT", -10, -8)
     
-    instance.fullWindow = CreateFrame("Frame", "DLFullDialogFrame", UIParent)
-    instance.fullWindow:SetSize(initialWidthStat, initialHeightStat)
-    instance.fullWindow:SetPoint("CENTER")
-    instance.fullWindow:SetBackdrop(instance.mainWnd:GetBackdrop())
-    instance.fullWindow:SetBackdropColor(0, 0, 0, 0.5)
-    instance.fullWindow:Hide()
-	instance.fullWindow:SetScript("OnSizeChanged", function(self, width, height)
-        width = math.max(minWidthStat, math.min(width, maxWidthStat))
-        height = math.max(minHeightStat, math.min(height, maxHeightStat))
-        self:SetSize(width, height)
-        
-        instance.statsFrame:SetPoint("BOTTOMRIGHT", self, "BOTTOMLEFT", width * FULL_WINDOW_SPLIT, 10)
-        instance.imageFrame:SetPoint("TOPLEFT", instance.statsFrame, "TOPRIGHT", 10, 0)
-        instance.imageFrame:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -10, 10)
-    end)
-    instance.fullWindow:SetMinResize(minWidthStat, minHeightStat)
-    instance.fullWindow:SetMaxResize(maxWidthStat, maxHeightStat)
-	
-    instance.statsFrame = CreateFrame("Frame", nil, instance.fullWindow)
-    instance.statsFrame:SetPoint("TOPLEFT", 10, -30)
-    instance.statsFrame:SetPoint("BOTTOMRIGHT", instance.fullWindow, "BOTTOMLEFT", instance.fullWindow:GetWidth() * 0.7, 10)
-    
-    instance.imageFrame = CreateFrame("Frame", nil, instance.fullWindow)
-    instance.imageFrame:SetPoint("TOPLEFT", instance.statsFrame, "TOPRIGHT", 10, 0)
-    instance.imageFrame:SetPoint("BOTTOMRIGHT", -10, 10)
-    
-	instance.koboldImage = instance.imageFrame:CreateTexture(nil, "ARTWORK")
-	instance.koboldImage:SetAllPoints()
-	instance.koboldImage:SetTexture("Interface\\Icons\\Ability_Repair")
-	instance.koboldImage:SetTexCoord(0.1, 0.9, 0.1, 0.9)
-
-	instance.koboldImage = instance.statsFrame:CreateTexture(nil, "ARTWORK")
-	instance.koboldImage:SetAllPoints()
-	instance.koboldImage:SetTexture("Interface\\Icons\\Ability_Ambush")
-	instance.koboldImage:SetTexCoord(0.1, 0.9, 0.1, 0.9)
-	
-    instance.statsTitle = instance.statsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    instance.statsTitle:SetPoint("CENTER", instance.statsFrame, "TOP", 0, 15)
-    instance.statsTitle:SetText("Статистика")
-    
-	local fullWindowCloseButton = CreateFrame("Button", nil, instance.fullWindow, "UIPanelCloseButton")
-	fullWindowCloseButton:SetPoint("TOPRIGHT", instance.fullWindow, "TOPRIGHT", -1, -1)
-	fullWindowCloseButton:SetScript("OnClick", function()
-		isFullWindow = false
-		instance.fullWindow:Hide()
+-- статистика
+    instance.fullWindow = CreateFrame("Frame", "DLStatsParentFrame_v2", UIParent)
+	instance.fullWindow:SetSize(statsWidth, statsHeight)
+	instance.fullWindow:SetPoint("CENTER")
+	instance.fullWindow:EnableKeyboard(true)
+	instance.fullWindow:Hide()
+	instance.fullWindow:SetScript("OnKeyDown", function(self, key)
+	if key == "ESCAPE" then
+		self:Hide()
 		instance.mainWnd:Show()
-		instance.toggleSizeButton:SetNormalFontObject("GameFontNormal")
-		instance.toggleSizeButton:SetHighlightFontObject("GameFontHighlight")
-		instance.toggleSizeButton:SetText("Статистика1")
-	end)
-	
-	instance.fullWindow:SetMovable(true)
-	instance.fullWindow:EnableMouse(true)
-	instance.fullWindow:SetResizable(true)
-	instance.fullWindow:RegisterForDrag("LeftButton")
-	instance.fullWindow:SetScript("OnDragStart", instance.fullWindow.StartMoving)
-	instance.fullWindow:SetScript("OnDragStop", function(self)
-		self:StopMovingOrSizing()
-	end)
-
-	local fullResizeButton = CreateFrame("Button", nil, instance.fullWindow)
-	fullResizeButton:SetSize(16, 16)
-	fullResizeButton:SetPoint("BOTTOMRIGHT", -2, 3)
-	fullResizeButton:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
-	fullResizeButton:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
-	fullResizeButton:SetScript("OnMouseDown", function(self, button)
-		if button == "LeftButton" then
-			instance.fullWindow:StartSizing("BOTTOMRIGHT")
+		instance.toggleSizeButton:SetText("Статистика")
+		isFullWindow = false
 		end
 	end)
-	fullResizeButton:SetScript("OnMouseUp", function(self, button)
-		instance.fullWindow:StopMovingOrSizing()
+	instance.fullWindow:SetScript("OnShow", function()
+		if not instance.statsInstance then
+			instance.statsInstance = Stats.new(instance.fullWindow)
+		end
+		instance.statsInstance:ClearContent()
+		instance.statsInstance:UpdateStats()
+		isFullWindow = false
 	end)
 
     local closeButton = CreateFrame("Button", nil, instance.mainWnd, "UIPanelCloseButton")
     closeButton:SetPoint("TOPRIGHT", -1, -1)
-    closeButton:SetScript("OnClick", function() instance:Hide() end)
-    
+    closeButton:SetScript("OnClick", function() 
+        instance:Hide()
+    end)
+
     local resetButton = CreateFrame("Button", nil, instance.mainWnd, "GameMenuButtonTemplate")
     resetButton:SetSize(80, 22)
     resetButton:SetPoint("TOPRIGHT", closeButton, "TOPLEFT", -1, -3)
@@ -491,7 +570,7 @@ function DeathLogWidget.new()
 			end
 
 			DeathLoggerDB.entries = {}
-			print("|cFF00FF00Death Logger|r: Список умерших сброшен.")
+			print("|cFF00FF00Death Logger|r: Список умерших сброшен")
 		end,
 		timeout = 20,
 		whileDead = true,
@@ -520,28 +599,22 @@ function DeathLogWidget.new()
         hordeBtn, "TOPLEFT", -5, 0
     )
     
-    -- Раскомментировать в 1.6
-    -- instance.toggleSizeButton = CreateFrame("Button", nil, instance.mainWnd, "GameMenuButtonTemplate")
-    -- instance.toggleSizeButton:SetSize(100, 22)
-    -- instance.toggleSizeButton:SetPoint("TOPRIGHT", allBtn, "TOPLEFT", -5, 0)
-    -- instance.toggleSizeButton:SetText("Статистика")
-	-- instance.toggleSizeButton:SetNormalFontObject("GameFontNormal")
-	-- instance.toggleSizeButton:SetHighlightFontObject("GameFontHighlight")
-    -- instance.toggleSizeButton:SetScript("OnClick", function()
-        -- isFullWindow = not isFullWindow
-        -- if isFullWindow then
-            -- local point, relativeTo, relativePoint, xOfs, yOfs = instance.mainWnd:GetPoint()
-            -- instance.fullWindow:ClearAllPoints()
-            -- instance.fullWindow:SetPoint(point, relativeTo, relativePoint, xOfs, yOfs)
-            -- instance.mainWnd:Hide()
-            -- instance.fullWindow:Show()
-            -- instance.toggleSizeButton:SetText("Обычный режим")
-        -- else
-            -- instance.fullWindow:Hide()
-            -- instance.mainWnd:Show()
-            -- instance.toggleSizeButton:SetText("Статистика")
-        -- end
-    -- end)
+    instance.toggleSizeButton = CreateFrame("Button", nil, instance.mainWnd, "GameMenuButtonTemplate")
+    instance.toggleSizeButton:SetSize(100, 22)
+    instance.toggleSizeButton:SetPoint("TOPRIGHT", allBtn, "TOPLEFT", -5, 0)
+    instance.toggleSizeButton:SetText("Статистика")
+    instance.toggleSizeButton:SetNormalFontObject("GameFontNormal")
+    instance.toggleSizeButton:SetHighlightFontObject("GameFontHighlight")
+	instance.toggleSizeButton:SetScript("OnClick", function()
+		isFullWindow = not isFullWindow
+		if isFullWindow then
+			instance.fullWindow:Show()
+			instance.mainWnd:Hide()
+		else
+			instance.fullWindow:Hide()
+			instance.mainWnd:Show()
+		end
+	end)
     
     instance.scrollFrame = CreateFrame("ScrollFrame", nil, instance.mainWnd, "UIPanelScrollFrameTemplate")
     instance.scrollFrame:SetPoint("TOPLEFT", 10, -30)
@@ -581,6 +654,7 @@ function DeathLogWidget.new()
             instance.mainWnd.isResizing = false
         end
     end)
+	if DEBUG then print("[DeathLogger] Загружено записей:", #DeathLoggerDB.entries) end
     
     instance.textFrames = {}
     instance.previousEntry = nil
@@ -611,22 +685,18 @@ end
 function DeathLogWidget:CreateTextFrame()
 	local frame = CreateFrame("Frame", nil, self.scrollChild)
     frame:SetSize(self.scrollChild:GetWidth(), 14)
-
 	frame:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT")
 	frame:SetPoint("TOPRIGHT", self.scrollChild, "TOPRIGHT")
 	frame:EnableMouse(true)
-
 	frame.factionIcon = frame:CreateTexture(nil, "OVERLAY")
 	frame.factionIcon:SetSize(14, 14)
 	frame.factionIcon:SetPoint("LEFT", frame, "LEFT", 5, 0)
-
 	frame.text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	frame.text:SetPoint("LEFT", frame.factionIcon, "RIGHT", 5, 0)
 	frame.text:SetJustifyH("LEFT")
 	frame.text:SetJustifyV("TOP")
     frame.text:SetNonSpaceWrap(false)
     frame.text:SetWordWrap(false)
-
 	frame:SetScript("OnMouseUp", function(self, button)
 	    if button == "RightButton" and IsShiftKeyDown() then
         if self.playerName then
@@ -634,7 +704,7 @@ function DeathLogWidget:CreateTextFrame()
             isManualGuildRequest = true
             SlashCmdList["DEATHLOGGERINFO"](self.playerName)
         else
-            print("[DEBUG] Имя игрока не найдено.")
+            print("[DEBUG] Имя игрока не найдено")
         end
 		elseif button == "LeftButton" then
 			if IsShiftKeyDown() then
@@ -645,7 +715,7 @@ function DeathLogWidget:CreateTextFrame()
 				if self.playerName then
 					ChatFrame_SendTell(self.playerName)
 				else
-					print("[DEBUG] Имя игрока не найдено. Невозможно открыть приватный чат.")
+					print("[DEBUG] Имя игрока не найдено. Невозможно открыть приватный чат")
 				end
 			end
 		end
@@ -672,6 +742,7 @@ function DeathLogWidget:AddEntry(data, tooltip, faction, playerName, parseGuild)
         ["Орда"] = "Interface\\Icons\\Achievement_PVP_H_H"
     })[faction] or "Interface\\Icons\\Inv_misc_questionmark"
 	Debug("Обработка AddEntry")
+	Debug("------------------")
     entry.text:SetText(data)
     entry.playerName = playerName
     entry.tooltip = tooltip
@@ -706,7 +777,7 @@ function DeathLogWidget:AddEntry(data, tooltip, faction, playerName, parseGuild)
     end
 end
 
--- Дополнительно: Добавить метод очистки пула либо проработать фоновую загрузку
+-- Дополнительно: добавить метод очистки пула либо проработать фоновую загрузку
 function DeathLogWidget:ClearPool()
     for i = #self.textFrames, 1, -1 do
         local frame = self.textFrames[i]
@@ -761,9 +832,34 @@ end
 
 function DeathLogWidget:Show()
     if isFullWindow then
+        if self.statsInstance then
+            self.statsInstance:UpdateStats()
+        end
         self.fullWindow:Show()
         self.mainWnd:Hide()
     else
+        if DeathLoggerDB.point then
+            self.mainWnd:ClearAllPoints()
+            -- обработка таблицы для первых версий аддона при переходе к новой версии DL
+            if type(DeathLoggerDB.point) == "table" then
+                self.mainWnd:SetPoint(
+                    DeathLoggerDB.point[1] or "CENTER",
+                    UIParent,
+                    DeathLoggerDB.point[3] or "CENTER",
+                    DeathLoggerDB.point[4] or 0,
+                    DeathLoggerDB.point[5] or 0
+                )
+            else
+                -- нормальный случай 
+                self.mainWnd:SetPoint(
+                    DeathLoggerDB.point,
+                    UIParent,
+                    DeathLoggerDB.relativePoint,
+                    DeathLoggerDB.xOfs,
+                    DeathLoggerDB.yOfs
+                )
+            end
+        end
         self.fullWindow:Hide()
         self.mainWnd:Show()
     end
@@ -772,7 +868,9 @@ end
 
 function DeathLogWidget:Hide()
     self.mainWnd:Hide()
-    self.fullWindow:Hide()
+    if self.fullWindow then
+        self.fullWindow:Hide()
+    end
     DeathLoggerDB.isShown = false
 end
 
@@ -782,7 +880,10 @@ end
 
 -- дата 
 
-local function SaveEntry(data, tooltip, faction, playerName, parseGuild)
+local function SaveEntry(data, tooltip, faction, playerName, parseGuild, class)
+    if not DeathLoggerDB.entries then DeathLoggerDB.entries = {} end
+    local clean_data = data:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+
     if not DeathLoggerDB.entries then
         DeathLoggerDB.entries = {}
     end
@@ -791,55 +892,88 @@ local function SaveEntry(data, tooltip, faction, playerName, parseGuild)
         tooltip = tooltip,
         faction = faction,
         playerName = playerName,
-        parseGuild = parseGuild
+        parseGuild = parseGuild,
+        class = class
     })
 end
 
 local function OnDeath(text)
-	if IsInGuild() then
-		UpdateGuildMembers()
-	end
+    if IsInGuild() then
+        UpdateGuildMembers()
+    end
 
-	local parseGuild = ""
+    local parseGuild = ""
+    
+    local dataMap = Utils.StringToMap(text)
+    if not dataMap.name then
+        return
+    end
 	
-	local dataMap = Utils.StringToMap(text)
-	if not dataMap.name then
-		return
+    -- проверка является ли умерший сам игрок и включена ли настройка
+	-- если все же охото поспамить о смерти игрока в гильдии то закоммертировать первый вариант и открыть второй
+	if dataMap.name == UnitName("player") and DeathLoggerDB.announceDeathToGuild and IsInGuild() then
+    -- if Utils.IsPlayerInGuild(dataMap.name) and DeathLoggerDB.announceDeathToGuild and IsInGuild() then
+	Debug("Событие собственной смерти")
+	    local cause = Utils.causes[dataMap.causeID] or dataMap.causeID
+		-- ТЕСТ анонса: Силаотчима (Альянс 30 уровня) погиб от Убийство в Ясневый лес
+		-- Новый вариант: Силаотчима (30 уровня) погиб в Ясневый лес от Убийство
+		local message = string.format("%s (%d уровня) погиб в %s от %s", 
+			dataMap.name, dataMap.level, dataMap.locationStr, cause)
+			
+		local cleanMessage = message:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+		Debug("Пытаемся отправить сообщение:", cleanMessage)
+		Debug("Длина сообщения:", string.len(cleanMessage))
+		
+		local success, err = pcall(SendChatMessage, cleanMessage, "GUILD")
+		if success then
+			Debug("Сообщение отправлено успешно")
+		else
+			Debug("Ошибка отправки:", err)
+			local simpleMessage = string.format("%s погиб от %s в %s", 
+				dataMap.name, cause, dataMap.locationStr)
+			Debug("Сообщение в упрощенном варианте отправлено", simpleMessage)	
+			SendChatMessage(simpleMessage, "GUILD")
+		end
 	end
-
-	pendingRequest = dataMap.name
+	
+    -- if Utils.IsPlayerInGuild(dataMap.name) then
+		-- Debug("[Флеш окно] Событие смерти игрока из гильдии")
+		-- Debug("Цвет флеша: ", HCBL_Settings and HCBL_Settings.fontColor and string.format("Rd:%.1f Gr:%.1f Bl:%.1f Alph:%.1f", HCBL_Settings.fontColor.r, HCBL_Settings.fontColor.g, HCBL_Settings.fontColor.b, HCBL_Settings.fontColor.a))
+        -- ShowDeathOverlay(HCBL_Settings and HCBL_Settings.fontColor)
+	-- end
+    
+    pendingRequest = dataMap.name
     RequestPlayerInfo(pendingRequest)
 
     local causeID = dataMap.causeID or 0
-
     if causeID < 0 or causeID > 11 then
         causeID = 10
     end
 
     HCBL_Settings.currentDeathIcon = _G.deathIcons[causeID] or _G.deathIcons[0]
-    
-    Debug("[OnDeath] causeID:", causeID)
-    Debug("[OnDeath] Путь к иконке:", HCBL_Settings.currentDeathIcon)
+    Debug("[OnDeath] causeID:", causeID, "| Путь к иконке:",HCBL_Settings.currentDeathIcon)
 
     if HardcoreLossBanner and HardcoreLossBanner.CustomDeathIcon then
         HardcoreLossBanner.CustomDeathIcon:SetTexture(HCBL_Settings.currentDeathIcon)
-        Debug("[OnDeath] Иконка установлена.")
+        Debug("[OnDeath] Баннер установлен")
     end
 
     local timerFrame = CreateFrame("Frame")
     local elapsedTime = 0
     timerFrame:SetScript("OnUpdate", function(self, elapsed)
         elapsedTime = elapsedTime + elapsed
-        if elapsedTime >= 0.8 then
-            local deadPlayerData, tooltip, playerName = FormatData(dataMap)
+        if elapsedTime >= 0.5 then
+            local deadPlayerData, tooltip, playerName, class  = FormatData(dataMap)
             local _, _, faction = Utils.GetRaceData(dataMap.raceID)
+            local class = Utils.classes[dataMap.classID] or "Unknown"
 
             if widgetInstance then
                 widgetInstance:AddEntry(deadPlayerData, tooltip, faction, playerName, parseGuild)
                 widgetInstance:UpdateEntriesPosition()
             end
-
-            SaveEntry(deadPlayerData, tooltip, faction, playerName, parseGuild)
+			
+--			ShowDeathOverlay(HCBL_Settings.fontColor or {r = 1, g = 0, b = 0, a = 0.7}) -- временно
+            SaveEntry(deadPlayerData, tooltip, faction, playerName, parseGuild, class)
             self:SetScript("OnUpdate", nil)
         end
     end)
@@ -856,41 +990,38 @@ local function OnComplete(text)
 	if not dataMap.name then
 		return
 	end
-	    
+	
 	pendingRequest = dataMap.name
     RequestPlayerInfo(pendingRequest)
-
+	
     local causeID = 11
-
-
     if causeID < 0 or causeID > 11 then
         causeID = 10
     end
-
+	
     HCBL_Settings.currentDeathIcon = _G.deathIcons[causeID] or _G.deathIcons[0]
-    
-    Debug("[OnDeath] causeID:", causeID)
-    Debug("[OnDeath] Путь к иконке:", HCBL_Settings.currentDeathIcon)
-
+    Debug("[OnComplete] causeID:", causeID, "| Путь к иконке:",HCBL_Settings.currentDeathIcon)
+	
     if HardcoreLossBanner and HardcoreLossBanner.CustomDeathIcon then
         HardcoreLossBanner.CustomDeathIcon:SetTexture(HCBL_Settings.currentDeathIcon)
-        Debug("[OnDeath] Иконка установлена.")
+        Debug("[OnComplete] Баннер установлен")
     end
-
+	
     local timerFrame = CreateFrame("Frame")
     local elapsedTime = 0
     timerFrame:SetScript("OnUpdate", function(self, elapsed)
         elapsedTime = elapsedTime + elapsed
-        if elapsedTime >= 0.8 then
-			local challengeCompletedData, tooltip, playerName = FormatCompletedChallengeData(dataMap)
+        if elapsedTime >= 0.5 then
+			local challengeCompletedData, tooltip, playerName, class  = FormatCompletedChallengeData(dataMap)
 			local _, _, faction = Utils.GetRaceData(dataMap.raceID)
+			local class = Utils.classes[dataMap.classID] or "Unknown"
 
 			if widgetInstance then
 				widgetInstance:AddEntry(challengeCompletedData, tooltip, faction, playerName, parseGuild)
 				widgetInstance:UpdateEntriesPosition()
 			end
 	
-			SaveEntry(challengeCompletedData, tooltip, faction, playerName, parseGuild)
+			SaveEntry(challengeCompletedData, tooltip, faction, playerName, parseGuild, class) 
 			self:SetScript("OnUpdate", nil)
 	    end
     end)
@@ -906,6 +1037,8 @@ local function InitWindow(shouldShow)
 		widgetInstance:Hide()
 	end
 end
+
+-- слеш команды
 
 SlashCmdList["DEATHLOGGER"] = function(input)
     if widgetInstance then
@@ -934,15 +1067,20 @@ end
 -- сохранение загрузка запией
 
 local function SaveEntriesOnLogout()
+    if DL_EdgeGlow then
+        DL_EdgeGlow:Hide()
+    end
+    
     DeathLoggerDB.guildOnly = DeathLoggerDB.guildOnly or false
+    DeathLoggerDB.announceDeathToGuild = DeathLoggerDB.announceDeathToGuild or false
     DeathLoggerDB.isShown = widgetInstance and widgetInstance:IsShown() or false
     DeathLoggerDB.guildMembers = guildMembers
     DeathLoggerDB.minWidth = DeathLoggerDB.minWidth or 200
     DeathLoggerDB.minHeight = DeathLoggerDB.minHeight or 100
     DeathLoggerDB.width = DeathLoggerDB.width or DeathLoggerDB.minWidth
     DeathLoggerDB.height = DeathLoggerDB.height or DeathLoggerDB.minHeight
-	DeathLoggerDB.HCBL_Settings = DeathLoggerDB.HCBL_Settings or {}
-	Utils.CopyTable(HCBL_Settings, DeathLoggerDB.HCBL_Settings)
+    DeathLoggerDB.HCBL_Settings = DeathLoggerDB.HCBL_Settings or {}
+    Utils.CopyTable(HCBL_Settings, DeathLoggerDB.HCBL_Settings)
 end
 
 local function LoadEntries()
@@ -951,7 +1089,7 @@ local function LoadEntries()
         local maxEntriesToLoad = math.min(totalEntries, 777)
         for i = maxEntriesToLoad, 1, -1 do
             local entryData = DeathLoggerDB.entries[i]
-            widgetInstance:AddEntry(entryData.data, entryData.tooltip, entryData.faction, entryData.playerName, entryData.parseGuild)
+            widgetInstance:AddEntry(entryData.data, entryData.tooltip, entryData.faction, entryData.playerName, entryData.parseGuild, entryData.class)
         end
         widgetInstance:ApplyFilter(function(entry)
             if DeathLoggerDB.guildOnly then
@@ -978,20 +1116,22 @@ local function OnEvent(self, event, ...)
             DeathLoggerDB.HCBL_Settings.initialized = true
             HCBL_Settings = DeathLoggerDB.HCBL_Settings			
             DeathLoggerDB.HCBL_Settings.dl_ver = Options.defaults.dl_ver
-
-			-- Возможно это более правильная загрузка. Тестировать.
+            DeathLoggerDB.announceDeathToGuild = DeathLoggerDB.announceDeathToGuild or false
+			
+			-- Возможно это более правильная загрузка. тестировать.
 			-- if not DeathLoggerDB.HCBL_Settings or not DeathLoggerDB.HCBL_Settings.initialized then
 				-- DeathLoggerDB.HCBL_Settings = DeathLoggerDB.HCBL_Settings or {}
 				-- Utils.CopyTable(defaults, DeathLoggerDB.HCBL_Settings)
 				-- DeathLoggerDB.HCBL_Settings.initialized = true
 			-- end
 			-- HCBL_Settings = DeathLoggerDB.HCBL_Settings
-		
+			
 		    original_ChatFrame_OnHyperlinkShow = ChatFrame_OnHyperlinkShow
 			ChatFrame_OnHyperlinkShow = NewChatFrame_OnHyperlinkShow
 			self:UnregisterEvent("ADDON_LOADED")
-
+			
 			DeathLoggerDB.entries = DeathLoggerDB.entries or {}
+			DeathLoggerDB.guildMembers = DeathLoggerDB.guildMembers or {}
 			DeathLoggerDB.guildOnly = DeathLoggerDB.guildOnly or false
 			DeathLoggerDB.isShown = DeathLoggerDB.isShown ~= nil and DeathLoggerDB.isShown or false
 			DeathLoggerDB.showOnStartup = DeathLoggerDB.showOnStartup or false
@@ -1001,16 +1141,17 @@ local function OnEvent(self, event, ...)
 			DeathLoggerDB.height = DeathLoggerDB.height or DeathLoggerDB.minHeight
 	        DeathLoggerDB.minimapIcon = DeathLoggerDB.minimapIcon or {}
             DeathLoggerDB.minimapIcon.minimapPos = DeathLoggerDB.minimapIcon.minimapPos or 333 
-
+			
 			if not original_ChatFrame_OnHyperlinkShow then
 				original_ChatFrame_OnHyperlinkShow = ChatFrame_OnHyperlinkShow
 			end
-
+			
 			if DeathLoggerDB.guildMembers then
 				local unique = {}
 				for _, name in ipairs(DeathLoggerDB.guildMembers) do
 					unique[name] = true
 			end
+			
 			guildMembers = {}
 				for name in pairs(unique) do
 					table.insert(guildMembers, name)
@@ -1020,17 +1161,24 @@ local function OnEvent(self, event, ...)
 			end
 			if not widgetInstance then
 				widgetInstance = DeathLogWidget.new()
+				if widgetInstance.fullWindow then
+					widgetInstance.statsInstance = Stats.new(widgetInstance.fullWindow)
+				end
 			end
 			if DeathLoggerDB.isShown then
 				widgetInstance:Show()
 			else
 				widgetInstance:Hide()
 			end
+			if DeathLoggerDB.isShown and DeathLoggerDB.statsShown then
+				widgetInstance.fullWindow:Show()
+				widgetInstance.mainWnd:Hide()
+			end
 			if widgetInstance then
 				LoadEntries()
 				widgetInstance:ApplyFilter(function(entry) return true end)
 			end
-		
+			
 			initMinimapButton()
 			Options.CreateOptionsPanel()
 			if HardcoreLossBanner then
@@ -1046,14 +1194,12 @@ local function OnEvent(self, event, ...)
             local cutData = Utils.StringToMap(text)
             local causeID = cutData.causeID or 0
 			HCBL_Settings.currentDeathIcon = _G.deathIcons[causeID] or 10
-            Debug("Received causeID:", causeID, "| Icon:", HCBL_Settings.currentDeathIcon)
-		    Debug("Обработка OnDeath", text)
+		    Debug("[ASMSG_HARDCORE_DEATH] Обработка OnDeath", text)
 		elseif prefix == "ASMSG_HARDCORE_COMPLETE" then
 			OnComplete(text)
 			local causeID = 11
-			HCBL_Settings.currentDeathIcon = _G.deathIcons[causeID] or ""
-            Debug("Received causeID:", causeID, "| Icon:", HCBL_Settings.currentDeathIcon)
-		    Debug("Обработка OnComplete", text)
+			HCBL_Settings.currentDeathIcon = _G.deathIcons[causeID] or 11
+		    Debug("[ASMSG_HARDCORE_COMPLETE] Обработка OnComplete", text)
 		end
 	elseif event == "WHO_LIST_UPDATE" then
 		if pendingRequest then

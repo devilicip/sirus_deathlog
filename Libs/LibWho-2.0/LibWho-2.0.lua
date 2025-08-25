@@ -76,8 +76,8 @@ lib.CacheQueue = {}
 lib.SetWhoToUIState = 0
 
 
-lib.MinInterval = 0.25
-lib.MaxInterval = 0.6
+lib.MinInterval = 0.1
+lib.MaxInterval = 0.3
 
 ---
 --- locale

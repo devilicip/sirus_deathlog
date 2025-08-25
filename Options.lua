@@ -46,7 +46,7 @@ local defaults = {
     fontShadow = true,
     fontStyle = "NORMAL",
     scaleFactor = 1.0,
-    dl_ver = 1.483
+    dl_ver = 1.765
 }
 
 local isConfigOpen = false
@@ -105,7 +105,6 @@ local function UpdateBannerElements()
     end
 	
     local icon = HCBL_Settings.currentDeathIcon or defaults.currentDeathIcon
-	-- local icon  = _G.deathIcons[causeID] or defaults.currentDeathIcon
 
     if icon ~= "" and not HCBL_Settings.hideSkullCircle then
         HardcoreLossBanner.CustomDeathIcon:SetTexture(icon)
@@ -263,6 +262,7 @@ local function CreateOptionsPanel()
 	minHeightSlider.Text:SetPoint("TOP", minHeightSlider, "BOTTOM", 0, -5)
 	minHeightSlider.Text:SetText(math.floor((DeathLoggerDB.minHeight or 100) / screenHeight * 100) .. "%")
 	minHeightSlider:SetScript("OnValueChanged", function(self, value)
+	
 	local percent = math.floor(value)
 	self.Text:SetText(percent .. "%")
 	DeathLoggerDB.minHeight = screenHeight * percent / 100
@@ -298,11 +298,33 @@ local function CreateOptionsPanel()
 		GameTooltip:Hide()
 	end)
 
+	local announceCheckbox = CreateFrame("CheckButton", "DeathLoggerAnnounceDeathCheckbox", panel, "UICheckButtonTemplate")
+	announceCheckbox:SetPoint("LEFT", guildOnlyCheckbox.text, "RIGHT", 20, 0)
+	announceCheckbox:SetChecked(DeathLoggerDB.announceDeathToGuild or true)
+	announceCheckbox:SetScript("OnClick", function(self)
+		DeathLoggerDB.announceDeathToGuild = self:GetChecked()
+	end)
+	
+	local announceText = announceCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	announceText:SetPoint("LEFT", announceCheckbox, "RIGHT", 5, 0)
+	announceText:SetText("Сообщать в гильдию о своей смерти")
+	
+	announceCheckbox.tooltipText = "При включении, при вашей смерти будет отправлено сообщение в гильдейский чат"
+	announceCheckbox:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:SetText(self.tooltipText, nil, nil, nil, nil, true)
+		GameTooltip:Show()
+	end)
+	
+	announceCheckbox:SetScript("OnLeave", function(self)
+		GameTooltip:Hide()
+	end)
+
     local container = CreateFrame("Frame", nil, panel)
     container:SetPoint("TOPLEFT", guildOnlyCheckbox, "BOTTOMLEFT", 0, -20)
     container:SetPoint("BOTTOMRIGHT", panel, -16, 16)
 
-    -- Чекбокс спрятать оригинальный баннер
+    -- чекбокс спрятать оригинальный баннер
     local hideCheckbox = CreateFrame("CheckButton", nil, container, "OptionsCheckButtonTemplate")
     hideCheckbox:SetPoint("TOPLEFT", 20, -20)
     hideCheckbox:SetSize(24, 24)
@@ -329,7 +351,7 @@ local function CreateOptionsPanel()
 		SetupOriginalBanner()
 	end)
 
-    -- Чекбокс позиционирования
+    -- чекбокс позиционирования
     local positionCheckbox = CreateFrame("CheckButton", nil, container, "OptionsCheckButtonTemplate")
     positionCheckbox:SetPoint("TOPLEFT", hideCheckbox, "BOTTOMLEFT", 0, -30)
     positionCheckbox:SetSize(24, 24)
@@ -347,7 +369,7 @@ local function CreateOptionsPanel()
 		SetupOriginalBanner()
 	end)
 
-	-- Кнопка черепа
+	-- кнопка черепа
     local skullCheckbox = CreateFrame("CheckButton", nil, container, "OptionsCheckButtonTemplate")
     skullCheckbox:SetPoint("LEFT", hideCheckbox, "RIGHT", 250, 0)
     skullCheckbox:SetSize(24, 24)
@@ -361,7 +383,7 @@ local function CreateOptionsPanel()
         UpdateBannerElements()
     end)
 
-    -- Сброс позиции
+    -- сброс позиции
     local resetButton = CreateFrame("Button", nil, container, "UIPanelButtonTemplate")
     resetButton:SetPoint("TOPLEFT", skullCheckbox, "BOTTOMLEFT", 0, -30)
     resetButton:SetSize(140, 25)
@@ -373,7 +395,7 @@ local function CreateOptionsPanel()
         UpdateBannerPosition()
     end)
 
-	-- Шрифт
+	-- шрифт
     local fontDropdown = CreateFrame("Frame", "HCBLFontDropdown", container, "UIDropDownMenuTemplate")
 	fontDropdown:SetParent(panel)
     fontDropdown:SetPoint("TOPLEFT", positionCheckbox, "BOTTOMLEFT", -10, -30)
@@ -397,7 +419,7 @@ local function CreateOptionsPanel()
     end
     UIDropDownMenu_Initialize(fontDropdown, FontDropdown_Initialize)
 
-	-- Стиль контура
+	-- стиль контура
 	local outlineDropdown = CreateFrame("Frame", "HCBLOutlineDropdown", container, "UIDropDownMenuTemplate")
 	outlineDropdown:SetParent(panel)
 	outlineDropdown:SetPoint("LEFT", fontDropdown, "RIGHT", 130, 0)
@@ -420,7 +442,7 @@ local function CreateOptionsPanel()
 	end	
 	UIDropDownMenu_Initialize(outlineDropdown, OutlineDropdown_Initialize)
 	
-    -- Выбор цвета
+    -- выбор цвета
     local colorButton = CreateFrame("Button", nil, container, "UIPanelButtonTemplate")
     colorButton:SetPoint("TOPLEFT", fontDropdown, "BOTTOMLEFT", 15, -30)
     colorButton:SetSize(120, 25)
@@ -438,7 +460,7 @@ local function CreateOptionsPanel()
         ColorPickerFrame:Show()
     end)
 
-    -- Тень текста
+    -- тень текста
     local shadowCheckbox = CreateFrame("CheckButton", nil, container, "OptionsCheckButtonTemplate")
     shadowCheckbox:SetPoint("LEFT", colorButton, "RIGHT", 35, 0)
     shadowCheckbox:SetSize(24, 24)
@@ -452,7 +474,7 @@ local function CreateOptionsPanel()
         UpdateBannerElements()
     end)
 	
-	-- Масштаб
+	-- масштаб
     local scaleSlider = CreateFrame("Slider", "HCBLScaleSlider", container, "OptionsSliderTemplate")
     scaleSlider:SetPoint("LEFT", shadowCheckbox, "RIGHT", 115, 0)
     scaleSlider:SetWidth(200)
@@ -469,10 +491,82 @@ local function CreateOptionsPanel()
         UpdateBannerElements()
     end)
 
-	-- Баннер скрывается при закрытии панели
+    -- синхронизация
+    local syncHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    syncHeader:SetPoint("TOPLEFT", colorButton, "BOTTOMLEFT", 0, -40)
+    syncHeader:SetText("Синхронизация записей")
+    local syncContainer = CreateFrame("Frame", nil, panel)
+    syncContainer:SetPoint("TOPLEFT", syncHeader, "BOTTOMLEFT", 0, -10)
+    syncContainer:SetSize(400, 80)
+
+    -- левая колонка
+    local syncCheckbox = CreateFrame("CheckButton", nil, syncContainer, "UICheckButtonTemplate")
+    syncCheckbox:SetPoint("TOPLEFT", 0, 0)
+    syncCheckbox.text:SetText("Включить синхронизацию")
+    syncCheckbox.tooltipText = "Обмениваться данными о смертях с другими игроками"
+    syncCheckbox:SetChecked(DeathLoggerDB.syncEnabled or defaults.syncEnabled)
+    syncCheckbox:SetScript("OnClick", function(self)
+        DeathLoggerDB.syncEnabled = self:GetChecked()
+    end)
+    syncCheckbox:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.tooltipText, nil, nil, nil, nil, true)
+        GameTooltip:Show()
+    end)
+    syncCheckbox:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+    end)
+
+    local syncButton = CreateFrame("Button", nil, syncContainer, "UIPanelButtonTemplate")
+    syncButton:SetPoint("TOPLEFT", syncCheckbox, "BOTTOMLEFT", 0, -10)
+    syncButton:SetSize(180, 22)
+    syncButton:SetText("Запросить историю сейчас")
+    syncButton:SetScript("OnClick", function()
+        if DeathLoggerSync and DeathLoggerSync.RequestFullSync then
+            DeathLoggerSync:RequestFullSync()
+        end
+    end)
+
+    -- правая колонка
+    local autoSyncCheckbox = CreateFrame("CheckButton", nil, syncContainer, "UICheckButtonTemplate")
+    autoSyncCheckbox:SetPoint("LEFT", syncCheckbox, "RIGHT", 250, 0)
+    autoSyncCheckbox.text:SetText("Автоматическая синхронизация")
+    autoSyncCheckbox.tooltipText = "Автоматически запрашивать историю при входе в игру"
+    autoSyncCheckbox:SetChecked(DeathLoggerDB.autoSync or defaults.autoSync)
+    autoSyncCheckbox:SetScript("OnClick", function(self)
+        DeathLoggerDB.autoSync = self:GetChecked()
+    end)
+    autoSyncCheckbox:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.tooltipText, nil, nil, nil, nil, true)
+        GameTooltip:Show()
+    end)
+    autoSyncCheckbox:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+    end)
+
+    local notifyCheckbox = CreateFrame("CheckButton", nil, syncContainer, "UICheckButtonTemplate")
+    notifyCheckbox:SetPoint("LEFT", syncButton, "RIGHT", 100, 0)
+    notifyCheckbox.text:SetText("Уведомления о синхронизации")
+    notifyCheckbox.tooltipText = "Показывать сообщения о полученных записях"
+    notifyCheckbox:SetChecked(DeathLoggerDB.syncNotifications or defaults.syncNotifications)
+    notifyCheckbox:SetScript("OnClick", function(self)
+        DeathLoggerDB.syncNotifications = self:GetChecked()
+    end)
+    notifyCheckbox:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.tooltipText, nil, nil, nil, nil, true)
+        GameTooltip:Show()
+    end)
+    notifyCheckbox:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+    end)
+	
+	-- баннер скрывается при закрытии панели
 	panel:SetScript("OnShow", function()
 		isConfigOpen = true
 		HCBL_Settings = DeathLoggerDB.HCBL_Settings
+		announceCheckbox:SetChecked(DeathLoggerDB.announceDeathToGuild)
 		guildOnlyCheckbox:SetChecked(DeathLoggerDB.guildOnly)
 		hideCheckbox:SetChecked(HCBL_Settings.hideOriginal)
 		positionCheckbox:SetChecked(HCBL_Settings.moveOriginal)
