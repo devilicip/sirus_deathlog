@@ -46,7 +46,10 @@ local defaults = {
     fontShadow = true,
     fontStyle = "NORMAL",
     scaleFactor = 1.0,
-    dl_ver = 1.765
+    dl_ver = 1.815
+    -- syncEnabled = true,          -- синхронизация по умолчанию
+    -- autoSync = true,             -- автосинхронизация 
+    -- syncNotifications = true,    -- уведомления о синхронизации
 }
 
 local isConfigOpen = false
@@ -57,28 +60,28 @@ local function UpdateBannerElements()
     if not (HardcoreLossBanner and HardcoreLossBanner.Title) then
         return
     end
-
+    
     if HCBL_Settings.hideOriginal then
         HardcoreLossBanner:Hide()
         return
     end
-	
+    
     HCBL_Settings.fontColor = HCBL_Settings.fontColor or defaults.fontColor
     HCBL_Settings.scaleFactor = HCBL_Settings.scaleFactor or defaults.scaleFactor
     HCBL_Settings.fontName = HCBL_Settings.fontName or defaults.fontName
     HCBL_Settings.fontOutline = HCBL_Settings.fontOutline or defaults.fontOutline
-
+    
     if HardcoreLossBanner and HardcoreLossBanner.Title then
-	    HCBL_Settings.fontColor = HCBL_Settings.fontColor or {r=1, g=1, b=1, a=1}
-
+        HCBL_Settings.fontColor = HCBL_Settings.fontColor or {r=1, g=1, b=1, a=1}
+        
         local fontPath = string.format("Fonts\\%s.ttf", HCBL_Settings.fontName or defaults.fontName)
         HardcoreLossBanner.Title:SetFont(fontPath, HCBL_Settings.fontSize or defaults.fontSize, HCBL_Settings.fontOutline or defaults.fontOutline)
-
+        
         local scale = HCBL_Settings.scaleFactor or 1.0
         scale = math.min(math.max(scale, 0.5), 2.0)
         HardcoreLossBanner:SetScale(scale)
-		
-		HardcoreLossBanner.Title:SetTextColor(
+        
+        HardcoreLossBanner.Title:SetTextColor(
             HCBL_Settings.fontColor.r,
             HCBL_Settings.fontColor.g,
             HCBL_Settings.fontColor.b,
@@ -87,25 +90,25 @@ local function UpdateBannerElements()
         HardcoreLossBanner.Title:SetShadowColor(0, 0, 0, HCBL_Settings.fontShadow and 1 or 0)
         HardcoreLossBanner.Title:SetShadowOffset(1, -1)
     end
-	if not HardcoreLossBanner.CustomDeathIcon then
-		HardcoreLossBanner.CustomDeathIcon = HardcoreLossBanner:CreateTexture(nil, "OVERLAY", nil, 7)
-		HardcoreLossBanner.CustomDeathIcon:SetSize(iconSize, iconSize)
-		HardcoreLossBanner.CustomDeathIcon:SetPoint("CENTER", HardcoreLossBanner.SkullCircle, "CENTER", 0, 0)
-		HardcoreLossBanner.CustomDeathIcon:SetBlendMode("BLEND")
-		HardcoreLossBanner.CustomDeathIcon:SetTexCoord(0, 1, 0, 1)
-	
-		local maskTexture = HardcoreLossBanner:CreateTexture(nil, "BORDER")
-		maskTexture:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask")
-		maskTexture:SetAllPoints(HardcoreLossBanner.CustomDeathIcon)
-		maskTexture:SetSize(iconSize, iconSize)
-	end
-
+    if not HardcoreLossBanner.CustomDeathIcon then
+        HardcoreLossBanner.CustomDeathIcon = HardcoreLossBanner:CreateTexture(nil, "OVERLAY", nil, 7)
+        HardcoreLossBanner.CustomDeathIcon:SetSize(iconSize, iconSize)
+        HardcoreLossBanner.CustomDeathIcon:SetPoint("CENTER", HardcoreLossBanner.SkullCircle, "CENTER", 0, 0)
+        HardcoreLossBanner.CustomDeathIcon:SetBlendMode("BLEND")
+        HardcoreLossBanner.CustomDeathIcon:SetTexCoord(0, 1, 0, 1)
+        
+        local maskTexture = HardcoreLossBanner:CreateTexture(nil, "BORDER")
+        maskTexture:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask")
+        maskTexture:SetAllPoints(HardcoreLossBanner.CustomDeathIcon)
+        maskTexture:SetSize(iconSize, iconSize)
+    end
+    
     if HCBL_Settings.currentDeathIcon then
         HardcoreLossBanner.CustomDeathIcon:SetTexture(HCBL_Settings.currentDeathIcon)
     end
-	
+    
     local icon = HCBL_Settings.currentDeathIcon or defaults.currentDeathIcon
-
+    
     if icon ~= "" and not HCBL_Settings.hideSkullCircle then
         HardcoreLossBanner.CustomDeathIcon:SetTexture(icon)
         HardcoreLossBanner.CustomDeathIcon:Show()
@@ -115,7 +118,7 @@ local function UpdateBannerElements()
         HardcoreLossBanner.CustomDeathIcon:Hide()
         HardcoreLossBanner.SkullCircle:SetAlpha(1)
     end
-
+    
     local scale = math.min(math.max(HCBL_Settings.scaleFactor or 1.0, 0.5), 2.0)
     HardcoreLossBanner:SetScale(scale)
 end
@@ -143,22 +146,22 @@ local function SetupBannerMovement(banner)
             self.isMoving = true
         end
     end)
-
+    
     banner:SetScript("OnMouseUp", function(self, button)
         if self.isMoving then
             self:StopMovingOrSizing()
             self.isMoving = false
-
+            
             local centerX, centerY = self:GetCenter()
             local screenWidth = UIParent:GetWidth()
             local screenHeight = UIParent:GetHeight()
-
+            
             HCBL_Settings.origOffsetX = (centerX - screenWidth / 2)
             HCBL_Settings.origOffsetY = (centerY - screenHeight / 2)
-
+            
             DeathLoggerDB.HCBL_Settings.origOffsetX = HCBL_Settings.origOffsetX
             DeathLoggerDB.HCBL_Settings.origOffsetY = HCBL_Settings.origOffsetY
-
+            
             UpdateBannerPosition()
         end
     end)
@@ -169,7 +172,7 @@ local function SetupOriginalBanner()
         DeathLoggerDB.HCBL_Settings = {}
     end
     HCBL_Settings = DeathLoggerDB.HCBL_Settings
-
+    
     if HardcoreLossBanner and not HardcoreLossBanner.originalShow then
         HardcoreLossBanner.originalShow = HardcoreLossBanner.Show
         HardcoreLossBanner.Show = function(self, ...)
@@ -179,12 +182,12 @@ local function SetupOriginalBanner()
             self:originalShow(...)
         end
     end
-
+    
     if HardcoreLossBanner then
         UpdateBannerPosition()
         SetupBannerMovement(HardcoreLossBanner)
         UpdateBannerElements()
-
+        
         if HCBL_Settings.hideOriginal then
             HardcoreLossBanner:Hide()
             HCBL_Settings.moveOriginal = false
@@ -198,132 +201,132 @@ local function SetupOriginalBanner()
 end
 
 local function CreateOptionsPanel()
-	local panel = CreateFrame("Frame")
-	panel.name = addonName
+    local panel = CreateFrame("Frame")
+    panel.name = addonName
     panel:SetSize(600, 500)
-
-	local title = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-	title:SetPoint("TOPLEFT", 16, -16)
-	title:SetText(addonName)
-
+    
+    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    title:SetPoint("TOPLEFT", 16, -16)
+    title:SetText(addonName)
+    
     local mainContainer = CreateFrame("Frame", nil, panel)
     mainContainer:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -30)
     mainContainer:SetPoint("BOTTOMRIGHT", panel, -16, 16)
-	
-	local screenWidth = GetScreenWidth()
-	local screenHeight = GetScreenHeight()
-	local maxWidth = screenWidth * 0.45
-	local maxHeight = screenHeight * 0.70
-	local minWidthLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	minWidthLabel:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -20)
-	minWidthLabel:SetText("Минимальная ширина (в % от экрана):")
-
-	local minWidthSlider = CreateFrame("Slider", nil, panel, "OptionsSliderTemplate")
-	minWidthSlider:SetPoint("TOPLEFT", minWidthLabel, "BOTTOMLEFT", 0, -10)
-	minWidthSlider:SetWidth(200)
-	minWidthSlider:SetMinMaxValues(10, 45)
-	minWidthSlider:SetValueStep(1)
-	minWidthSlider:SetValue((DeathLoggerDB.minWidth or 200) / screenWidth * 100)
-	minWidthSlider.tooltipText = "Установите минимальную ширину окна в процентах от ширины экрана (макс. 45%)"
-	minWidthSlider.Low:SetText("10%")
-	minWidthSlider.High:SetText("45%")
-	minWidthSlider.Text = minWidthSlider:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	minWidthSlider.Text:SetPoint("TOP", minWidthSlider, "BOTTOM", 0, -5)
-	minWidthSlider.Text:SetText(math.floor((DeathLoggerDB.minWidth or 100) / screenWidth * 100) .. "%")
-	minWidthSlider:SetScript("OnValueChanged", function(self, value)
-		local screenWidth = GetScreenWidth()
-		local percent = math.floor(value)
-		self.Text:SetText(percent .. "%")
-		DeathLoggerDB.minWidth = math.max(100, math.min(screenWidth * percent / 100, screenWidth * 0.45))
-		DeathLoggerDB.width = DeathLoggerDB.minWidth
-		if widgetInstance and widgetInstance.mainWnd then
-			widgetInstance.mainWnd:SetMinResize(DeathLoggerDB.minWidth, DeathLoggerDB.minHeight)
-			widgetInstance.mainWnd:SetMaxResize(maxWidth, maxHeight)
-			local currentWidth, currentHeight = widgetInstance.mainWnd:GetSize()
-			widgetInstance.mainWnd:SetWidth(math.min(DeathLoggerDB.minWidth, maxWidth))
-		end
-		widgetInstance.mainWnd:SetMinResize(DeathLoggerDB.minWidth, DeathLoggerDB.minHeight)
-	end)
-
-	local minHeightLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	minHeightLabel:SetPoint("LEFT", minWidthLabel, "RIGHT", 50, 0)
-	minHeightLabel:SetText("Минимальная высота окна (%):")
-
-	local minHeightSlider = CreateFrame("Slider", nil, panel, "OptionsSliderTemplate")
-	minHeightSlider:SetPoint("TOPLEFT", minHeightLabel, "BOTTOMLEFT", 0, -10)
-	minHeightSlider:SetWidth(200)
-	minHeightSlider:SetMinMaxValues(10, 70)
-	minHeightSlider:SetValueStep(1)
-	minHeightSlider:SetValue((DeathLoggerDB.minHeight or 100) / screenHeight * 100)
-	minHeightSlider.tooltipText = "Установите минимальную высоту окна в процентах от высоты экрана (макс. 70%)"
-	minHeightSlider.Low:SetText("10%")
-	minHeightSlider.High:SetText("70%")
-	minHeightSlider.Text = minHeightSlider:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	minHeightSlider.Text:SetPoint("TOP", minHeightSlider, "BOTTOM", 0, -5)
-	minHeightSlider.Text:SetText(math.floor((DeathLoggerDB.minHeight or 100) / screenHeight * 100) .. "%")
-	minHeightSlider:SetScript("OnValueChanged", function(self, value)
-	
-	local percent = math.floor(value)
-	self.Text:SetText(percent .. "%")
-	DeathLoggerDB.minHeight = screenHeight * percent / 100
-	DeathLoggerDB.height = DeathLoggerDB.minHeight
-		if widgetInstance then
-			widgetInstance.mainWnd:SetMinResize(DeathLoggerDB.minWidth, DeathLoggerDB.minHeight)
-			widgetInstance.mainWnd:SetMaxResize(maxWidth, maxHeight)
-			local currentWidth, currentHeight = widgetInstance.mainWnd:GetSize()
-			widgetInstance.mainWnd:SetHeight(math.min(DeathLoggerDB.minHeight, maxHeight))
-		end
-	widgetInstance.mainWnd:SetMinResize(DeathLoggerDB.minWidth, DeathLoggerDB.minHeight)
-	end)
-
-	local guildOnlyCheckbox = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
-	guildOnlyCheckbox:SetPoint("TOPLEFT", minWidthSlider, "BOTTOMLEFT", 0, -30)
-	guildOnlyCheckbox.text:SetText("Показывать только гильдейские смерти")
-	guildOnlyCheckbox:SetChecked(DeathLoggerDB.guildOnly or false)
-	guildOnlyCheckbox:SetScript("OnClick", function(self)
-		DeathLoggerDB.guildOnly = self:GetChecked()
-		if widgetInstance then
-			widgetInstance:ApplyFilter(function(entry) return true end)
-		end
-	end)
-
-	guildOnlyCheckbox.tooltipText = "Если включено, фильтр применяется только к текущему составу гильдии.\n\n|cFF00FF00Примечание:|r Если игрок удалил игрового персонажа фильтр не будет применяться."
-	guildOnlyCheckbox:SetScript("OnEnter", function(self)
-		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-		GameTooltip:SetText(self.tooltipText, nil, nil, nil, nil, true)
-		GameTooltip:Show()
-	end)
-
-	guildOnlyCheckbox:SetScript("OnLeave", function(self)
-		GameTooltip:Hide()
-	end)
-
-	local announceCheckbox = CreateFrame("CheckButton", "DeathLoggerAnnounceDeathCheckbox", panel, "UICheckButtonTemplate")
-	announceCheckbox:SetPoint("LEFT", guildOnlyCheckbox.text, "RIGHT", 20, 0)
-	announceCheckbox:SetChecked(DeathLoggerDB.announceDeathToGuild or true)
-	announceCheckbox:SetScript("OnClick", function(self)
-		DeathLoggerDB.announceDeathToGuild = self:GetChecked()
-	end)
-	
-	local announceText = announceCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	announceText:SetPoint("LEFT", announceCheckbox, "RIGHT", 5, 0)
-	announceText:SetText("Сообщать в гильдию о своей смерти")
-	
-	announceCheckbox.tooltipText = "При включении, при вашей смерти будет отправлено сообщение в гильдейский чат"
-	announceCheckbox:SetScript("OnEnter", function(self)
-		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-		GameTooltip:SetText(self.tooltipText, nil, nil, nil, nil, true)
-		GameTooltip:Show()
-	end)
-	
-	announceCheckbox:SetScript("OnLeave", function(self)
-		GameTooltip:Hide()
-	end)
-
+    
+    local screenWidth = GetScreenWidth()
+    local screenHeight = GetScreenHeight()
+    local maxWidth = screenWidth * 0.45
+    local maxHeight = screenHeight * 0.70
+    local minWidthLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    minWidthLabel:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -20)
+    minWidthLabel:SetText("Минимальная ширина (в % от экрана):")
+    
+    local minWidthSlider = CreateFrame("Slider", nil, panel, "OptionsSliderTemplate")
+    minWidthSlider:SetPoint("TOPLEFT", minWidthLabel, "BOTTOMLEFT", 0, -10)
+    minWidthSlider:SetWidth(200)
+    minWidthSlider:SetMinMaxValues(10, 45)
+    minWidthSlider:SetValueStep(1)
+    minWidthSlider:SetValue((DeathLoggerDB.minWidth or 200) / screenWidth * 100)
+    minWidthSlider.tooltipText = "Установите минимальную ширину окна в процентах от ширины экрана (макс. 45%)"
+    minWidthSlider.Low:SetText("10%")
+    minWidthSlider.High:SetText("45%")
+    minWidthSlider.Text = minWidthSlider:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    minWidthSlider.Text:SetPoint("TOP", minWidthSlider, "BOTTOM", 0, -5)
+    minWidthSlider.Text:SetText(math.floor((DeathLoggerDB.minWidth or 100) / screenWidth * 100) .. "%")
+    minWidthSlider:SetScript("OnValueChanged", function(self, value)
+        local screenWidth = GetScreenWidth()
+        local percent = math.floor(value)
+        self.Text:SetText(percent .. "%")
+        DeathLoggerDB.minWidth = math.max(100, math.min(screenWidth * percent / 100, screenWidth * 0.45))
+        DeathLoggerDB.width = DeathLoggerDB.minWidth
+        if widgetInstance and widgetInstance.mainWnd then
+            widgetInstance.mainWnd:SetMinResize(DeathLoggerDB.minWidth, DeathLoggerDB.minHeight)
+            widgetInstance.mainWnd:SetMaxResize(maxWidth, maxHeight)
+            local currentWidth, currentHeight = widgetInstance.mainWnd:GetSize()
+            widgetInstance.mainWnd:SetWidth(math.min(DeathLoggerDB.minWidth, maxWidth))
+        end
+        widgetInstance.mainWnd:SetMinResize(DeathLoggerDB.minWidth, DeathLoggerDB.minHeight)
+    end)
+    
+    local minHeightLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    minHeightLabel:SetPoint("LEFT", minWidthLabel, "RIGHT", 50, 0)
+    minHeightLabel:SetText("Минимальная высота окна (%):")
+    
+    local minHeightSlider = CreateFrame("Slider", nil, panel, "OptionsSliderTemplate")
+    minHeightSlider:SetPoint("TOPLEFT", minHeightLabel, "BOTTOMLEFT", 0, -10)
+    minHeightSlider:SetWidth(200)
+    minHeightSlider:SetMinMaxValues(10, 70)
+    minHeightSlider:SetValueStep(1)
+    minHeightSlider:SetValue((DeathLoggerDB.minHeight or 100) / screenHeight * 100)
+    minHeightSlider.tooltipText = "Установите минимальную высоту окна в процентах от высоты экрана (макс. 70%)"
+    minHeightSlider.Low:SetText("10%")
+    minHeightSlider.High:SetText("70%")
+    minHeightSlider.Text = minHeightSlider:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    minHeightSlider.Text:SetPoint("TOP", minHeightSlider, "BOTTOM", 0, -5)
+    minHeightSlider.Text:SetText(math.floor((DeathLoggerDB.minHeight or 100) / screenHeight * 100) .. "%")
+    minHeightSlider:SetScript("OnValueChanged", function(self, value)
+    
+    local percent = math.floor(value)
+    self.Text:SetText(percent .. "%")
+    DeathLoggerDB.minHeight = screenHeight * percent / 100
+    DeathLoggerDB.height = DeathLoggerDB.minHeight
+        if widgetInstance then
+            widgetInstance.mainWnd:SetMinResize(DeathLoggerDB.minWidth, DeathLoggerDB.minHeight)
+            widgetInstance.mainWnd:SetMaxResize(maxWidth, maxHeight)
+            local currentWidth, currentHeight = widgetInstance.mainWnd:GetSize()
+            widgetInstance.mainWnd:SetHeight(math.min(DeathLoggerDB.minHeight, maxHeight))
+        end
+    widgetInstance.mainWnd:SetMinResize(DeathLoggerDB.minWidth, DeathLoggerDB.minHeight)
+    end)
+    
+    local guildOnlyCheckbox = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+    guildOnlyCheckbox:SetPoint("TOPLEFT", minWidthSlider, "BOTTOMLEFT", 0, -30)
+    guildOnlyCheckbox.text:SetText("Показывать только гильдейские смерти")
+    guildOnlyCheckbox:SetChecked(DeathLoggerDB.guildOnly or false)
+    guildOnlyCheckbox:SetScript("OnClick", function(self)
+        DeathLoggerDB.guildOnly = self:GetChecked()
+        if widgetInstance then
+            widgetInstance:ApplyFilter(function(entry) return true end)
+        end
+    end)
+    
+    guildOnlyCheckbox.tooltipText = "Если включено, фильтр применяется только к текущему составу гильдии.\n\n|cFF00FF00Примечание:|r Если игрок удалил игрового персонажа фильтр не будет применяться."
+    guildOnlyCheckbox:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.tooltipText, nil, nil, nil, nil, true)
+        GameTooltip:Show()
+    end)
+    
+    guildOnlyCheckbox:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+    end)
+    
+    local announceCheckbox = CreateFrame("CheckButton", "DeathLoggerAnnounceDeathCheckbox", panel, "UICheckButtonTemplate")
+    announceCheckbox:SetPoint("LEFT", guildOnlyCheckbox.text, "RIGHT", 20, 0)
+    announceCheckbox:SetChecked(DeathLoggerDB.announceDeathToGuild or true)
+    announceCheckbox:SetScript("OnClick", function(self)
+        DeathLoggerDB.announceDeathToGuild = self:GetChecked()
+    end)
+    
+    local announceText = announceCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    announceText:SetPoint("LEFT", announceCheckbox, "RIGHT", 5, 0)
+    announceText:SetText("Сообщать в гильдию о своей смерти")
+    
+    announceCheckbox.tooltipText = "При включении, при вашей смерти будет отправлено сообщение в гильдейский чат"
+    announceCheckbox:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.tooltipText, nil, nil, nil, nil, true)
+        GameTooltip:Show()
+    end)
+    
+    announceCheckbox:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+    end)
+    
     local container = CreateFrame("Frame", nil, panel)
     container:SetPoint("TOPLEFT", guildOnlyCheckbox, "BOTTOMLEFT", 0, -20)
     container:SetPoint("BOTTOMRIGHT", panel, -16, 16)
-
+    
     -- чекбокс спрятать оригинальный баннер
     local hideCheckbox = CreateFrame("CheckButton", nil, container, "OptionsCheckButtonTemplate")
     hideCheckbox:SetPoint("TOPLEFT", 20, -20)
@@ -332,25 +335,25 @@ local function CreateOptionsPanel()
     hideCheckbox.text:SetPoint("LEFT", hideCheckbox, "RIGHT", 5, 0)
     hideCheckbox.text:SetText("Убрать оригинальный баннер")
     hideCheckbox:SetChecked(HCBL_Settings.hideOriginal)
-	hideCheckbox:SetScript("OnClick", function(self)
-		HCBL_Settings.hideOriginal = self:GetChecked()
-		DeathLoggerDB.HCBL_Settings = HCBL_Settings
+    hideCheckbox:SetScript("OnClick", function(self)
+        HCBL_Settings.hideOriginal = self:GetChecked()
+        DeathLoggerDB.HCBL_Settings = HCBL_Settings
+        
+        if not HCBL_Settings.hideOriginal then
+            HCBL_Settings.moveOriginal = true
+            if positionCheckbox then
+                positionCheckbox:SetChecked(true)
+            end
+        else
+            HCBL_Settings.moveOriginal = false
+        end
+        
+        if HCBL_Settings.hideOriginal and HardcoreLossBanner then
+            HardcoreLossBanner:Hide()
+        end
+        SetupOriginalBanner()
+    end)
     
-		if not HCBL_Settings.hideOriginal then
-			HCBL_Settings.moveOriginal = true
-			if positionCheckbox then
-				positionCheckbox:SetChecked(true)
-			end
-		else
-			HCBL_Settings.moveOriginal = false
-		end
-
-		if HCBL_Settings.hideOriginal and HardcoreLossBanner then
-			HardcoreLossBanner:Hide()
-		end
-		SetupOriginalBanner()
-	end)
-
     -- чекбокс позиционирования
     local positionCheckbox = CreateFrame("CheckButton", nil, container, "OptionsCheckButtonTemplate")
     positionCheckbox:SetPoint("TOPLEFT", hideCheckbox, "BOTTOMLEFT", 0, -30)
@@ -359,17 +362,17 @@ local function CreateOptionsPanel()
     positionCheckbox.text:SetPoint("LEFT", positionCheckbox, "RIGHT", 5, 0)
     positionCheckbox.text:SetText("Разрешить перемещение баннера")
     positionCheckbox:SetChecked(HCBL_Settings.moveOriginal)
-	positionCheckbox:SetScript("OnClick", function(self)
-		if HCBL_Settings.hideOriginal then 
-			self:SetChecked(false)
-			return 
-		end
-		HCBL_Settings.moveOriginal = self:GetChecked()
-		DeathLoggerDB.HCBL_Settings = HCBL_Settings
-		SetupOriginalBanner()
-	end)
-
-	-- кнопка черепа
+    positionCheckbox:SetScript("OnClick", function(self)
+        if HCBL_Settings.hideOriginal then 
+            self:SetChecked(false)
+            return 
+        end
+        HCBL_Settings.moveOriginal = self:GetChecked()
+        DeathLoggerDB.HCBL_Settings = HCBL_Settings
+        SetupOriginalBanner()
+    end)
+    
+    -- кнопка черепа
     local skullCheckbox = CreateFrame("CheckButton", nil, container, "OptionsCheckButtonTemplate")
     skullCheckbox:SetPoint("LEFT", hideCheckbox, "RIGHT", 250, 0)
     skullCheckbox:SetSize(24, 24)
@@ -379,10 +382,10 @@ local function CreateOptionsPanel()
     skullCheckbox:SetChecked(HCBL_Settings.hideSkullCircle)
     skullCheckbox:SetScript("OnClick", function(self)
         HCBL_Settings.hideSkullCircle = self:GetChecked()
-	    DeathLoggerDB.HCBL_Settings = HCBL_Settings
+        DeathLoggerDB.HCBL_Settings = HCBL_Settings
         UpdateBannerElements()
     end)
-
+    
     -- сброс позиции
     local resetButton = CreateFrame("Button", nil, container, "UIPanelButtonTemplate")
     resetButton:SetPoint("TOPLEFT", skullCheckbox, "BOTTOMLEFT", 0, -30)
@@ -391,18 +394,18 @@ local function CreateOptionsPanel()
     resetButton:SetScript("OnClick", function()
         HCBL_Settings.origOffsetX = defaults.origOffsetX
         HCBL_Settings.origOffsetY = defaults.origOffsetY
-	    DeathLoggerDB.HCBL_Settings = HCBL_Settings
+        DeathLoggerDB.HCBL_Settings = HCBL_Settings
         UpdateBannerPosition()
     end)
-
-	-- шрифт
+    
+    -- шрифт
     local fontDropdown = CreateFrame("Frame", "HCBLFontDropdown", container, "UIDropDownMenuTemplate")
-	fontDropdown:SetParent(panel)
+    fontDropdown:SetParent(panel)
     fontDropdown:SetPoint("TOPLEFT", positionCheckbox, "BOTTOMLEFT", -10, -30)
     UIDropDownMenu_SetWidth(fontDropdown, 150)
-	UIDropDownMenu_SetText(fontDropdown, "Шрифт: "..(HCBL_Settings.fontName or defaults.fontName))
-	UIDropDownMenu_Initialize(fontDropdown, FontDropdown_Initialize)
-
+    UIDropDownMenu_SetText(fontDropdown, "Шрифт: "..(HCBL_Settings.fontName or defaults.fontName))
+    UIDropDownMenu_Initialize(fontDropdown, FontDropdown_Initialize)
+    
     local function FontDropdown_Initialize()
         local fonts = {"FRIZQT__", "ARIALN", "MORPHEUS", "SKURRI", "FRIENDS", "NIM_____"}
         for _, font in ipairs(fonts) do
@@ -410,7 +413,7 @@ local function CreateOptionsPanel()
             info.text = font
             info.func = function()
                 HCBL_Settings.fontName = font
-			    DeathLoggerDB.HCBL_Settings = HCBL_Settings
+                DeathLoggerDB.HCBL_Settings = HCBL_Settings
                 UIDropDownMenu_SetText(fontDropdown, "Шрифт: "..font)
                 UpdateBannerElements()
             end
@@ -418,30 +421,30 @@ local function CreateOptionsPanel()
         end
     end
     UIDropDownMenu_Initialize(fontDropdown, FontDropdown_Initialize)
-
-	-- стиль контура
-	local outlineDropdown = CreateFrame("Frame", "HCBLOutlineDropdown", container, "UIDropDownMenuTemplate")
-	outlineDropdown:SetParent(panel)
-	outlineDropdown:SetPoint("LEFT", fontDropdown, "RIGHT", 130, 0)
-	UIDropDownMenu_SetWidth(outlineDropdown, 150)
-	UIDropDownMenu_SetText(outlineDropdown, "Контур: "..(HCBL_Settings.fontOutline or defaults.fontOutline))
-
-	local function OutlineDropdown_Initialize()
-		local outlines = {"NONE", "OUTLINE", "THICKOUTLINE"}
-		for _, outline in ipairs(outlines) do
-			local info = UIDropDownMenu_CreateInfo()
-			info.text = outline
-			info.func = function()
-				HCBL_Settings.fontOutline = outline
-				UIDropDownMenu_SetText(outlineDropdown, "Контур: "..outline)
-			    DeathLoggerDB.HCBL_Settings = HCBL_Settings
-				UpdateBannerElements()
-			end
-			UIDropDownMenu_AddButton(info)
-		end
-	end	
-	UIDropDownMenu_Initialize(outlineDropdown, OutlineDropdown_Initialize)
-	
+    
+    -- стиль контура
+    local outlineDropdown = CreateFrame("Frame", "HCBLOutlineDropdown", container, "UIDropDownMenuTemplate")
+    outlineDropdown:SetParent(panel)
+    outlineDropdown:SetPoint("LEFT", fontDropdown, "RIGHT", 130, 0)
+    UIDropDownMenu_SetWidth(outlineDropdown, 150)
+    UIDropDownMenu_SetText(outlineDropdown, "Контур: "..(HCBL_Settings.fontOutline or defaults.fontOutline))
+    
+    local function OutlineDropdown_Initialize()
+        local outlines = {"NONE", "OUTLINE", "THICKOUTLINE"}
+        for _, outline in ipairs(outlines) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = outline
+            info.func = function()
+                HCBL_Settings.fontOutline = outline
+                UIDropDownMenu_SetText(outlineDropdown, "Контур: "..outline)
+                DeathLoggerDB.HCBL_Settings = HCBL_Settings
+                UpdateBannerElements()
+            end
+            UIDropDownMenu_AddButton(info)
+        end
+    end    
+    UIDropDownMenu_Initialize(outlineDropdown, OutlineDropdown_Initialize)
+    
     -- выбор цвета
     local colorButton = CreateFrame("Button", nil, container, "UIPanelButtonTemplate")
     colorButton:SetPoint("TOPLEFT", fontDropdown, "BOTTOMLEFT", 15, -30)
@@ -454,12 +457,12 @@ local function CreateOptionsPanel()
         ColorPickerFrame.func = function()
             HCBL_Settings.fontColor.r, HCBL_Settings.fontColor.g, HCBL_Settings.fontColor.b = ColorPickerFrame:GetColorRGB()
             HCBL_Settings.fontColor.a = OpacitySliderFrame:GetValue()
-			DeathLoggerDB.HCBL_Settings = HCBL_Settings
+            DeathLoggerDB.HCBL_Settings = HCBL_Settings
             UpdateBannerElements()
         end
         ColorPickerFrame:Show()
     end)
-
+    
     -- тень текста
     local shadowCheckbox = CreateFrame("CheckButton", nil, container, "OptionsCheckButtonTemplate")
     shadowCheckbox:SetPoint("LEFT", colorButton, "RIGHT", 35, 0)
@@ -470,11 +473,11 @@ local function CreateOptionsPanel()
     shadowCheckbox:SetChecked(HCBL_Settings.fontShadow)
     shadowCheckbox:SetScript("OnClick", function(self)
         HCBL_Settings.fontShadow = self:GetChecked()
-	    DeathLoggerDB.HCBL_Settings = HCBL_Settings
+        DeathLoggerDB.HCBL_Settings = HCBL_Settings
         UpdateBannerElements()
     end)
-	
-	-- масштаб
+    
+    -- масштаб
     local scaleSlider = CreateFrame("Slider", "HCBLScaleSlider", container, "OptionsSliderTemplate")
     scaleSlider:SetPoint("LEFT", shadowCheckbox, "RIGHT", 115, 0)
     scaleSlider:SetWidth(200)
@@ -490,7 +493,7 @@ local function CreateOptionsPanel()
         self.Text:SetText(string.format("Размер: %.1f", HCBL_Settings.scaleFactor))
         UpdateBannerElements()
     end)
-
+    
     -- синхронизация
     local syncHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     syncHeader:SetPoint("TOPLEFT", colorButton, "BOTTOMLEFT", 0, -40)
@@ -498,15 +501,16 @@ local function CreateOptionsPanel()
     local syncContainer = CreateFrame("Frame", nil, panel)
     syncContainer:SetPoint("TOPLEFT", syncHeader, "BOTTOMLEFT", 0, -10)
     syncContainer:SetSize(400, 80)
-
+    
     -- левая колонка
     local syncCheckbox = CreateFrame("CheckButton", nil, syncContainer, "UICheckButtonTemplate")
     syncCheckbox:SetPoint("TOPLEFT", 0, 0)
     syncCheckbox.text:SetText("Включить синхронизацию")
     syncCheckbox.tooltipText = "Обмениваться данными о смертях с другими игроками"
-    syncCheckbox:SetChecked(DeathLoggerDB.syncEnabled or defaults.syncEnabled)
+    syncCheckbox:SetChecked(DeathLoggerDB.syncEnabled)
     syncCheckbox:SetScript("OnClick", function(self)
-        DeathLoggerDB.syncEnabled = self:GetChecked()
+        DeathLoggerDB.syncEnabled = self:GetChecked() or false
+        print("Синхронизация: " .. (DeathLoggerDB.syncEnabled and "|cff00ff00ВКЛ|r" or "|cffff0000ВЫКЛ|r"))
     end)
     syncCheckbox:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -516,7 +520,7 @@ local function CreateOptionsPanel()
     syncCheckbox:SetScript("OnLeave", function(self)
         GameTooltip:Hide()
     end)
-
+    
     local syncButton = CreateFrame("Button", nil, syncContainer, "UIPanelButtonTemplate")
     syncButton:SetPoint("TOPLEFT", syncCheckbox, "BOTTOMLEFT", 0, -10)
     syncButton:SetSize(180, 22)
@@ -526,15 +530,16 @@ local function CreateOptionsPanel()
             DeathLoggerSync:RequestFullSync()
         end
     end)
-
+    
     -- правая колонка
     local autoSyncCheckbox = CreateFrame("CheckButton", nil, syncContainer, "UICheckButtonTemplate")
     autoSyncCheckbox:SetPoint("LEFT", syncCheckbox, "RIGHT", 250, 0)
     autoSyncCheckbox.text:SetText("Автоматическая синхронизация")
     autoSyncCheckbox.tooltipText = "Автоматически запрашивать историю при входе в игру"
-    autoSyncCheckbox:SetChecked(DeathLoggerDB.autoSync or defaults.autoSync)
+    autoSyncCheckbox:SetChecked(DeathLoggerDB.autoSync)
     autoSyncCheckbox:SetScript("OnClick", function(self)
-        DeathLoggerDB.autoSync = self:GetChecked()
+        DeathLoggerDB.autoSync = self:GetChecked() or false
+        print("Автосинхронизация: " .. (DeathLoggerDB.autoSync and "|cff00ff00ВКЛ|r" or "|cffff0000ВЫКЛ|r"))
     end)
     autoSyncCheckbox:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -544,14 +549,15 @@ local function CreateOptionsPanel()
     autoSyncCheckbox:SetScript("OnLeave", function(self)
         GameTooltip:Hide()
     end)
-
+    
     local notifyCheckbox = CreateFrame("CheckButton", nil, syncContainer, "UICheckButtonTemplate")
     notifyCheckbox:SetPoint("LEFT", syncButton, "RIGHT", 100, 0)
     notifyCheckbox.text:SetText("Уведомления о синхронизации")
     notifyCheckbox.tooltipText = "Показывать сообщения о полученных записях"
-    notifyCheckbox:SetChecked(DeathLoggerDB.syncNotifications or defaults.syncNotifications)
+    notifyCheckbox:SetChecked(DeathLoggerDB.syncNotifications)
     notifyCheckbox:SetScript("OnClick", function(self)
-        DeathLoggerDB.syncNotifications = self:GetChecked()
+        DeathLoggerDB.syncNotifications = self:GetChecked() or false
+        print("Уведомления: " .. (DeathLoggerDB.syncNotifications and "|cff00ff00ВКЛ|r" or "|cffff0000ВЫКЛ|r"))
     end)
     notifyCheckbox:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -561,43 +567,51 @@ local function CreateOptionsPanel()
     notifyCheckbox:SetScript("OnLeave", function(self)
         GameTooltip:Hide()
     end)
-	
-	-- баннер скрывается при закрытии панели
-	panel:SetScript("OnShow", function()
-		isConfigOpen = true
-		HCBL_Settings = DeathLoggerDB.HCBL_Settings
-		announceCheckbox:SetChecked(DeathLoggerDB.announceDeathToGuild)
-		guildOnlyCheckbox:SetChecked(DeathLoggerDB.guildOnly)
-		hideCheckbox:SetChecked(HCBL_Settings.hideOriginal)
-		positionCheckbox:SetChecked(HCBL_Settings.moveOriginal)
-		skullCheckbox:SetChecked(HCBL_Settings.hideSkullCircle)
-		UIDropDownMenu_SetText(fontDropdown, "Шрифт: "..HCBL_Settings.fontName)
-	    shadowCheckbox:SetChecked(HCBL_Settings.fontShadow)
-		UIDropDownMenu_SetText(outlineDropdown, "Контур: "..HCBL_Settings.fontOutline)
-		scaleSlider:SetValue(HCBL_Settings.scaleFactor)
-    	SetupOriginalBanner()
-	end)
     
-	panel:SetScript("OnHide", function()
-		isConfigOpen = false
-		HCBL_Settings.showOriginalForPositioning = false
-		SetupOriginalBanner()
-		CloseDropDownMenus()
-	
-		if UIDROPDOWNMENU_OPEN_MENU then
-			if UIDROPDOWNMENU_OPEN_MENU == HCBLFontDropdown or 
-			UIDROPDOWNMENU_OPEN_MENU == HCBLOutlineDropdown then
+    -- баннер скрывается при закрытии панели
+    panel:SetScript("OnShow", function()
+        isConfigOpen = true
+        HCBL_Settings = DeathLoggerDB.HCBL_Settings or {}
+        
+        if DeathLoggerDB.syncEnabled == nil then DeathLoggerDB.syncEnabled = true end
+        if DeathLoggerDB.autoSync == nil then DeathLoggerDB.autoSync = true end
+        if DeathLoggerDB.syncNotifications == nil then DeathLoggerDB.syncNotifications = true end
+        
+        syncCheckbox:SetChecked(DeathLoggerDB.syncEnabled)
+        autoSyncCheckbox:SetChecked(DeathLoggerDB.autoSync)
+        notifyCheckbox:SetChecked(DeathLoggerDB.syncNotifications)
+        announceCheckbox:SetChecked(DeathLoggerDB.announceDeathToGuild)
+        guildOnlyCheckbox:SetChecked(DeathLoggerDB.guildOnly)
+        hideCheckbox:SetChecked(HCBL_Settings.hideOriginal or false)
+        positionCheckbox:SetChecked(HCBL_Settings.moveOriginal or false)
+        skullCheckbox:SetChecked(HCBL_Settings.hideSkullCircle or false)
+        UIDropDownMenu_SetText(fontDropdown, "Шрифт: "..(HCBL_Settings.fontName or defaults.fontName))
+        shadowCheckbox:SetChecked(HCBL_Settings.fontShadow ~= nil and HCBL_Settings.fontShadow or defaults.fontShadow)
+        UIDropDownMenu_SetText(outlineDropdown, "Контур: "..(HCBL_Settings.fontOutline or defaults.fontOutline))
+        scaleSlider:SetValue(HCBL_Settings.scaleFactor or defaults.scaleFactor)
+        SetupOriginalBanner()
+    end)
+    
+    panel:SetScript("OnHide", function()
+        isConfigOpen = false
+        HCBL_Settings.showOriginalForPositioning = false
+        SetupOriginalBanner()
+        CloseDropDownMenus()
+        
+        if UIDROPDOWNMENU_OPEN_MENU then
+            if UIDROPDOWNMENU_OPEN_MENU == HCBLFontDropdown or 
+            UIDROPDOWNMENU_OPEN_MENU == HCBLOutlineDropdown then
             CloseDropDownMenus()
-			end
-		end
-		CloseDropDownMenus()
-	end)
-
-	InterfaceOptions_AddCategory(panel)
+            end
+        end
+        CloseDropDownMenus()
+    end)
+    
+    InterfaceOptions_AddCategory(panel)
 end
 
 _G.DeathLogger_Options = {
-	defaults = defaults,
+    defaults = defaults,
     UpdateBannerElements = UpdateBannerElements,
     UpdateBannerPosition = UpdateBannerPosition,
     SetupOriginalBanner = SetupOriginalBanner,

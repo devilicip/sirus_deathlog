@@ -149,6 +149,12 @@ end
 -- end
 
 function Utils.StringToMap(str)
+
+    if not str or type(str) ~= "string" then
+        print("[DEBUG][StringToMap] Invalid input:", str)
+        return {}
+    end
+    
     local tbl = {}
     local keys = { "name", "raceID", "sideID", "classID", "level", "locationStr", "causeID", "enemyName", "enemyLevel" }
     local index = 1
@@ -157,7 +163,7 @@ function Utils.StringToMap(str)
         index = index + 1
         if index > #keys then break end  -- сейв от переполнения
     end
-	tbl.name = Utils.ExtractName(str)
+    tbl.name = Utils.ExtractName(str)
     tbl.causeID = tbl.causeID or 0
     return tbl
 end
@@ -214,6 +220,17 @@ function Utils.CopyTable(src, dst)
         end
     end
     return dst
+end
+
+if not Utils.TableCount then
+    function Utils.TableCount(t)
+        if not t then return 0 end
+        local count = 0
+        for _ in pairs(t) do
+            count = count + 1
+        end
+        return count
+    end
 end
 
 _G[addonName.."_Utils"] = Utils

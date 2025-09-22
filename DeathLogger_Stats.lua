@@ -134,19 +134,19 @@ function Stats:CreateVerticalTab(parent, text, onClickHandler)
     })
     tab:SetBackdropColor(0, 0, 0, 0.8)
     tab:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
-
+    
     local normalTex = tab:CreateTexture(nil, "BACKGROUND")
     normalTex:SetTexture("Interface\\Buttons\\WHITE8X8")
     normalTex:SetAllPoints()
     normalTex:SetVertexColor(0.1, 0.1, 0.1, 0.7)
     tab:SetNormalTexture(normalTex)
-
+    
     local highlightTex = tab:CreateTexture(nil, "HIGHLIGHT")
     highlightTex:SetTexture("Interface\\Buttons\\WHITE8X8")
     highlightTex:SetAllPoints()
     highlightTex:SetVertexColor(0.3, 0.3, 0.3, 0.7)
     tab:SetHighlightTexture(highlightTex)
-
+    
     local tabText = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     tabText:SetText(text)
     tabText:SetTextColor(1, 0.8, 0)
@@ -233,7 +233,7 @@ function Stats:SetupPieChartTooltip(pieChart, sectors)
     tooltipFrame:SetAllPoints(pieChart)
     tooltipFrame:SetFrameLevel(pieChart:GetFrameLevel() + 10)
     tooltipFrame.sectors = sectors
-
+    
     tooltipFrame:SetScript("OnUpdate", function(self, elapsed)
         if not self:IsVisible() then 
             DLTooltipFrame:Hide()
@@ -409,7 +409,7 @@ function Stats:DrawCurrentChart(middleColumnX, columnWidth)
         noData:SetPoint("CENTER")
         return
     end
-
+    
     local sectors = {}
     local startAngle = 0
     for _, entry in ipairs(data) do
@@ -492,11 +492,11 @@ function Stats:CollectStatistics()
     for _, range in ipairs(self.data.levelRanges) do
         range.count = 0
     end
-
+    
     for _, entry in ipairs(_G.DeathLoggerDB.entries) do
         if entry and entry.faction and entry.tooltip then
             self.data.total = self.data.total + 1
-
+            
             local faction = entry.faction
             if faction == "Орда" then
                 self.data.factions.Horde = self.data.factions.Horde + 1
@@ -505,12 +505,12 @@ function Stats:CollectStatistics()
             else
                 self.data.factions.Neutral = self.data.factions.Neutral + 1
             end
-
+            
             local class = self:ParseClassFromTooltip(entry.tooltip)
             if class ~= "Unknown" then
                 self.data.classes[class] = (self.data.classes[class] or 0) + 1
             end
-
+            
             local level = self:ParseLevelFromEntry(entry)
             for _, range in ipairs(self.data.levelRanges) do
                 if level >= range.min and level <= range.max then
@@ -518,7 +518,7 @@ function Stats:CollectStatistics()
                     break
                 end
             end
-
+            
             if level < 80 then
                 local cause = self:ParseCauseFromTooltip(entry.tooltip)
                 if cause ~= "Неизвестно" then
@@ -537,7 +537,7 @@ function Stats:DisplayStatistics()
         noData:SetPoint("CENTER")
         return
     end
-
+    
     local leftOffset = -15
     local rightOffset = -20
     local contentWidth = self.contentFrame:GetWidth()
@@ -547,10 +547,10 @@ function Stats:DisplayStatistics()
     local rightColumnX = middleColumnX + columnWidth + 10
     
     self.statsTitle:SetText("Статистика смертей")
-
+    
     leftOffset = self:CreateStatRow("Всего записей", self.data.total, leftOffset)
     leftOffset = leftOffset - 10
-
+    
     self:CreateClickableHeader(self.contentFrame, "Фракции", "Фракции", leftColumnX, leftOffset)
     leftOffset = leftOffset - 25
     
@@ -558,10 +558,10 @@ function Stats:DisplayStatistics()
     leftOffset = self:CreateStatRow("Орда", self.data.factions.Horde or 0, leftOffset)
     leftOffset = self:CreateStatRow("Нейтралы", self.data.factions.Neutral or 0, leftOffset)
     leftOffset = leftOffset - 20
-
+    
     self:CreateClickableHeader(self.contentFrame, "Классы", "Классы", leftColumnX, leftOffset)
     leftOffset = leftOffset - 25
-
+    
     if not next(self.data.classes) then
         local noData = self.contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         noData:SetText("|cff888888(данные отсутствуют)|r")
@@ -576,10 +576,10 @@ function Stats:DisplayStatistics()
             leftOffset = self:CreateStatRow(entry.class, entry.count, leftOffset)
         end
     end
-
+    
     self:CreateClickableHeader(self.contentFrame, "Уровни", "Уровни", middleColumnX, rightOffset)
     rightOffset = rightOffset - 25
-
+    
     for _, range in ipairs(self.data.levelRanges) do
         if range.count > 0 then
             local displayText = range.name or string.format("%d-%d", range.min, range.max)
@@ -594,16 +594,16 @@ function Stats:DisplayStatistics()
             rightOffset = rightOffset - (textLabel:GetHeight() + 5)
         end
     end
-
+    
     if next(self.data.causes) then
         rightOffset = rightOffset - 15
         self:CreateClickableHeader(self.contentFrame, "Причины", "Причины", middleColumnX, rightOffset)
         rightOffset = rightOffset - 25
-
+        
         local sortedCauses = {}
         for cause, count in pairs(self.data.causes) do table.insert(sortedCauses, {cause = cause, count = count}) end
         table.sort(sortedCauses, function(a, b) return a.count > b.count end)
-
+        
         for i, entry in ipairs(sortedCauses) do
             if i > 7 then break end
             local row = CreateFrame("Frame", nil, self.contentFrame)
@@ -617,7 +617,7 @@ function Stats:DisplayStatistics()
             rightOffset = rightOffset - (textLabel:GetHeight() + 5)
         end
     end
-
+    
     self:DrawCurrentChart(middleColumnX, columnWidth)
 end
 
@@ -655,26 +655,26 @@ function Stats:CreateSearchWindow(parent, width, height, padding, position)
     
     frame:Hide()
     
-		if DLStatsFrame then
-			DLStatsFrame:ClearAllPoints()
-			if _G.DeathLoggerDB.statsWindowPosition then
-				DLStatsFrame:SetPoint(unpack(_G.DeathLoggerDB.statsWindowPosition))
-			else
-				DLStatsFrame:SetPoint("CENTER")
-			end
-			DLStatsFrame:Show()
-		end
-	end)
-
+        if DLStatsFrame then
+            DLStatsFrame:ClearAllPoints()
+            if _G.DeathLoggerDB.statsWindowPosition then
+                DLStatsFrame:SetPoint(unpack(_G.DeathLoggerDB.statsWindowPosition))
+            else
+                DLStatsFrame:SetPoint("CENTER")
+            end
+            DLStatsFrame:Show()
+        end
+    end)
+    
     local contentFrame = CreateFrame("Frame", nil, frame)
     contentFrame:SetPoint("TOPLEFT", padding.left, -padding.top)
     contentFrame:SetPoint("BOTTOMRIGHT", -padding.right, padding.bottom)
-
+    
     frame.Background = frame:CreateTexture(nil, "BACKGROUND")
     frame.Background:SetAtlas("UI-EJ-Legion", true)
     frame.Background:SetAllPoints()
     frame.Background:SetAlpha(0.75)
-
+    
     frame:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -686,8 +686,8 @@ function Stats:CreateSearchWindow(parent, width, height, padding, position)
     frame.statsTabText = statsTabText
     frame:SetScript("OnShow", function()
         if DEBUG_MODE then print("|cFF00FF00DEBUG: Окно поиска открыто.|r") end
-                frame.statsTabText:SetText("Ста\nтис\nти\nка")
-
+            frame.statsTabText:SetText("Ста\nтис\nти\nка")
+        
         self.parsedEntriesCache = nil
         
         if not self.searchResults then
@@ -700,12 +700,12 @@ function Stats:CreateSearchWindow(parent, width, height, padding, position)
     
     local closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     closeButton:SetPoint("TOPRIGHT", -5, -5)
-	closeButton:SetScript("OnClick", function()
-		local point, relativeTo, relativePoint, xOfs, yOfs = frame:GetPoint(1)
-		local relativeToName = relativeTo and relativeTo:GetName() or "UIParent"
-		_G.DeathLoggerDB.searchWindowPosition = {point, relativeToName, relativePoint, xOfs, yOfs}
-		frame.statsTabText:SetText("Ста\nтис\nти\nка")
-		frame:Hide()
+    closeButton:SetScript("OnClick", function()
+        local point, relativeTo, relativePoint, xOfs, yOfs = frame:GetPoint(1)
+        local relativeToName = relativeTo and relativeTo:GetName() or "UIParent"
+        _G.DeathLoggerDB.searchWindowPosition = {point, relativeToName, relativePoint, xOfs, yOfs}
+        frame.statsTabText:SetText("Ста\nтис\nти\nка")
+        frame:Hide()
         if DLStatsFrame then
             DLStatsFrame:ClearAllPoints()
             if _G.DeathLoggerDB.statsWindowPosition then
@@ -719,7 +719,7 @@ function Stats:CreateSearchWindow(parent, width, height, padding, position)
             end
         end
     end)
-
+    
     local uniqueClasses = {}
     local uniqueCauses = {}
     
@@ -736,168 +736,168 @@ function Stats:CreateSearchWindow(parent, width, height, padding, position)
     if not next(uniqueClasses) then uniqueClasses["Неизвестно"] = true end
     if not next(uniqueCauses) then uniqueCauses["Неизвестно"] = true end
     
-	local filterContainer = CreateFrame("Frame", nil, frame)
-	filterContainer:SetPoint("TOP", 0, 0)
-	filterContainer:SetSize(contentFrame:GetWidth() - 40, 60)
-	
-	local inputs = {}
-	local currentX = 0
-	local columnWidth = 100
-	local spacing = 5
-	
-	local function CreateStyledInput(parent, width, height)
-		local container = CreateFrame("Frame", nil, parent)
-		container:SetSize(width, height)
-		
-		local bg = container:CreateTexture(nil, "BACKGROUND")
-		bg:SetTexture("Interface\\Common\\Common-Input-Border")
-		bg:SetTexCoord(0.0625, 0.9375, 0, 0.625)
-		bg:SetVertexColor(0.5, 0.5, 0.5, 1)
-		bg:SetAllPoints(container)
-		
-		local eb = CreateFrame("EditBox", nil, container)
-		eb:SetPoint("TOPLEFT", 5, -3)
-		eb:SetPoint("BOTTOMRIGHT", -5, 3)
-		eb:SetAutoFocus(false)
-		eb:SetFontObject("GameFontNormal")
-		eb:SetTextInsets(5, 5, 0, 0)
-		eb:SetJustifyH("LEFT")
-		eb:SetBackdrop(nil)
-		
-		return eb, container
-	end
-	
-	local function CreateFilterWithLabel(parent, name, elementType, values, default, width)
-		width = width or columnWidth
-		local container = CreateFrame("Frame", nil, parent)
-		container:SetSize(width, 45)
-		container:SetPoint("LEFT", currentX, 0)
-		currentX = currentX + width + spacing
-		
-		local label = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-		label:SetPoint("TOP", 0, 0)
-		label:SetText(name)
-		label:SetTextColor(1, 1, 0.8)
-		
-		local element
-		if elementType == "dropdown" then
-			element = CreateFrame("Frame", name.."Dropdown", container, "UIDropDownMenuTemplate")
-			element:SetPoint("TOP", label, "BOTTOM", 0, -5)
-			element:SetSize(width - 10, 32)
-			
-			local function OnValueSelected(self, arg1, arg2, checked)
-				UIDropDownMenu_SetText(element, arg1)
-				element.selectedValue = arg1
-			end
-			
-			UIDropDownMenu_Initialize(element, function(self, level, menuList)
-				local info = UIDropDownMenu_CreateInfo()
-				info.func = OnValueSelected
-				
-				info.text, info.arg1, info.checked = "Все", "Все", (element.selectedValue == "Все")
-				UIDropDownMenu_AddButton(info)
-				
-				for value in pairs(values) do
-					info.text, info.arg1, info.checked = value, value, (element.selectedValue == value)
-					UIDropDownMenu_AddButton(info)
-				end
-			end)
-			
-			UIDropDownMenu_SetWidth(element, width - 15)
-			UIDropDownMenu_SetText(element, default)
-			element.selectedValue = default
-		else
-			element, inputContainer = CreateStyledInput(container, width - 10, 22)
-			inputContainer:SetPoint("TOP", label, "BOTTOM", 0, -5)
-			element:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-		end
-		
-		return element
-	end
-
-	inputs.playerName = CreateFilterWithLabel(filterContainer, "Имя игрока", "editbox", nil, nil, 120)
-	inputs.class = CreateFilterWithLabel(filterContainer, "Класс", "dropdown", uniqueClasses, "Все", 120)
-	inputs.faction = CreateFilterWithLabel(filterContainer, "Фракция", "dropdown", {["Альянс"] = true, ["Орда"] = true, ["Нейтрал"] = true}, "Все", 90)
-	inputs.zone = CreateFilterWithLabel(filterContainer, "Зона", "editbox", nil, nil, 170)
-	inputs.cause = CreateFilterWithLabel(filterContainer, "Причина", "dropdown", uniqueCauses, "Все", 135)
-	
-	local levelContainer = CreateFrame("Frame", nil, filterContainer)
-	levelContainer:SetSize(90, 45)
-	levelContainer:SetPoint("LEFT", currentX, 0)
-	currentX = currentX + 90 + spacing
-	
-	inputs.guild = CreateFilterWithLabel(filterContainer, "Гильдия", "editbox", nil, nil, 160)
-	
-	local levelLabel = levelContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	levelLabel:SetPoint("TOP", 0, 0)
-	levelLabel:SetText("Уровень")
-	levelLabel:SetTextColor(1, 1, 0.8)
-	
-	local levelInputs = CreateFrame("Frame", nil, levelContainer)
-	levelInputs:SetPoint("TOP", levelLabel, "BOTTOM", 0, -5)
-	levelInputs:SetSize(80, 20)
-	
-	inputs.minLevel, minContainer = CreateStyledInput(levelInputs, 38, 22)
-	inputs.minLevel:SetAutoFocus(false)
-	inputs.minLevel:SetNumeric(true)
-	inputs.minLevel:SetMaxLetters(2)
-	minContainer:SetPoint("LEFT", levelInputs, "LEFT", 0, 0)
-	inputs.minLevel:SetScript("OnTabPressed", function(self)
-		inputs.maxLevel:SetFocus()
-	end)
-	inputs.minLevel:SetScript("OnEnterPressed", function(self)
-		self:ClearFocus()
-		statsInstance:PerformSearch(inputs)
-	end)
-	inputs.minLevel:SetScript("OnEscapePressed", function(self)
-		self:ClearFocus()
-	end)
-	inputs.minLevel:SetScript("OnTextChanged", function(self, userInput)
-		if userInput and #self:GetText() == 2 then
-			inputs.maxLevel:SetFocus()
-		end
-	end)
-	inputs.minLevel:SetTextInsets(2, 2, 0, 0)
-	
-	local dash = levelInputs:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	dash:SetPoint("LEFT", minContainer, "RIGHT", 2, 0)
-	dash:SetText("-")
-	
-	inputs.maxLevel, maxContainer = CreateStyledInput(levelInputs, 38, 22)
-	inputs.maxLevel:SetAutoFocus(false)
-	inputs.maxLevel:SetNumeric(true)
-	inputs.maxLevel:SetMaxLetters(2)
-	maxContainer:SetPoint("LEFT", dash, "RIGHT", 2, 0)
-	inputs.maxLevel:SetScript("OnTabPressed", function(self)
-		inputs.playerName:SetFocus()
-	end)
-	inputs.maxLevel:SetScript("OnEnterPressed", function(self)
-		self:ClearFocus()
-		statsInstance:PerformSearch(inputs)
-	end)
-	inputs.maxLevel:SetScript("OnEscapePressed", function(self)
-		self:ClearFocus()
-	end)
-	
-	inputs.maxLevel:SetTextInsets(2, 2, 0, 0)
-	
-	local statsInstance = self
-	
-	local function SetupEnterHandler(input)
-		if input then
-			input:SetScript("OnEnterPressed", function(self)
-				self:ClearFocus()
-				statsInstance:PerformSearch(inputs)
-			end)
-		end
-	end
-	
-	SetupEnterHandler(inputs.playerName)
-	SetupEnterHandler(inputs.minLevel)
-	SetupEnterHandler(inputs.maxLevel)
-	SetupEnterHandler(inputs.zone)
-	SetupEnterHandler(inputs.guild)
-	
+    local filterContainer = CreateFrame("Frame", nil, frame)
+    filterContainer:SetPoint("TOP", 0, 0)
+    filterContainer:SetSize(contentFrame:GetWidth() - 40, 60)
+    
+    local inputs = {}
+    local currentX = 0
+    local columnWidth = 100
+    local spacing = 5
+    
+    local function CreateStyledInput(parent, width, height)
+        local container = CreateFrame("Frame", nil, parent)
+        container:SetSize(width, height)
+        
+        local bg = container:CreateTexture(nil, "BACKGROUND")
+        bg:SetTexture("Interface\\Common\\Common-Input-Border")
+        bg:SetTexCoord(0.0625, 0.9375, 0, 0.625)
+        bg:SetVertexColor(0.5, 0.5, 0.5, 1)
+        bg:SetAllPoints(container)
+        
+        local eb = CreateFrame("EditBox", nil, container)
+        eb:SetPoint("TOPLEFT", 5, -3)
+        eb:SetPoint("BOTTOMRIGHT", -5, 3)
+        eb:SetAutoFocus(false)
+        eb:SetFontObject("GameFontNormal")
+        eb:SetTextInsets(5, 5, 0, 0)
+        eb:SetJustifyH("LEFT")
+        eb:SetBackdrop(nil)
+        
+        return eb, container
+    end
+    
+    local function CreateFilterWithLabel(parent, name, elementType, values, default, width)
+        width = width or columnWidth
+        local container = CreateFrame("Frame", nil, parent)
+        container:SetSize(width, 45)
+        container:SetPoint("LEFT", currentX, 0)
+        currentX = currentX + width + spacing
+        
+        local label = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        label:SetPoint("TOP", 0, 0)
+        label:SetText(name)
+        label:SetTextColor(1, 1, 0.8)
+        
+        local element
+        if elementType == "dropdown" then
+            element = CreateFrame("Frame", name.."Dropdown", container, "UIDropDownMenuTemplate")
+            element:SetPoint("TOP", label, "BOTTOM", 0, -5)
+            element:SetSize(width - 10, 32)
+            
+            local function OnValueSelected(self, arg1, arg2, checked)
+                UIDropDownMenu_SetText(element, arg1)
+                element.selectedValue = arg1
+            end
+            
+            UIDropDownMenu_Initialize(element, function(self, level, menuList)
+                local info = UIDropDownMenu_CreateInfo()
+                info.func = OnValueSelected
+                
+                info.text, info.arg1, info.checked = "Все", "Все", (element.selectedValue == "Все")
+                UIDropDownMenu_AddButton(info)
+                
+                for value in pairs(values) do
+                    info.text, info.arg1, info.checked = value, value, (element.selectedValue == value)
+                    UIDropDownMenu_AddButton(info)
+                end
+            end)
+            
+            UIDropDownMenu_SetWidth(element, width - 15)
+            UIDropDownMenu_SetText(element, default)
+            element.selectedValue = default
+        else
+            element, inputContainer = CreateStyledInput(container, width - 10, 22)
+            inputContainer:SetPoint("TOP", label, "BOTTOM", 0, -5)
+            element:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+        end
+        
+        return element
+    end
+    
+    inputs.playerName = CreateFilterWithLabel(filterContainer, "Имя игрока", "editbox", nil, nil, 120)
+    inputs.class = CreateFilterWithLabel(filterContainer, "Класс", "dropdown", uniqueClasses, "Все", 120)
+    inputs.faction = CreateFilterWithLabel(filterContainer, "Фракция", "dropdown", {["Альянс"] = true, ["Орда"] = true, ["Нейтрал"] = true}, "Все", 90)
+    inputs.zone = CreateFilterWithLabel(filterContainer, "Зона", "editbox", nil, nil, 170)
+    inputs.cause = CreateFilterWithLabel(filterContainer, "Причина", "dropdown", uniqueCauses, "Все", 135)
+    
+    local levelContainer = CreateFrame("Frame", nil, filterContainer)
+    levelContainer:SetSize(90, 45)
+    levelContainer:SetPoint("LEFT", currentX, 0)
+    currentX = currentX + 90 + spacing
+    
+    inputs.guild = CreateFilterWithLabel(filterContainer, "Гильдия", "editbox", nil, nil, 160)
+    
+    local levelLabel = levelContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    levelLabel:SetPoint("TOP", 0, 0)
+    levelLabel:SetText("Уровень")
+    levelLabel:SetTextColor(1, 1, 0.8)
+    
+    local levelInputs = CreateFrame("Frame", nil, levelContainer)
+    levelInputs:SetPoint("TOP", levelLabel, "BOTTOM", 0, -5)
+    levelInputs:SetSize(80, 20)
+    
+    inputs.minLevel, minContainer = CreateStyledInput(levelInputs, 38, 22)
+    inputs.minLevel:SetAutoFocus(false)
+    inputs.minLevel:SetNumeric(true)
+    inputs.minLevel:SetMaxLetters(2)
+    minContainer:SetPoint("LEFT", levelInputs, "LEFT", 0, 0)
+    inputs.minLevel:SetScript("OnTabPressed", function(self)
+        inputs.maxLevel:SetFocus()
+    end)
+    inputs.minLevel:SetScript("OnEnterPressed", function(self)
+        self:ClearFocus()
+        statsInstance:PerformSearch(inputs)
+    end)
+    inputs.minLevel:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+    end)
+    inputs.minLevel:SetScript("OnTextChanged", function(self, userInput)
+        if userInput and #self:GetText() == 2 then
+            inputs.maxLevel:SetFocus()
+        end
+    end)
+    inputs.minLevel:SetTextInsets(2, 2, 0, 0)
+    
+    local dash = levelInputs:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    dash:SetPoint("LEFT", minContainer, "RIGHT", 2, 0)
+    dash:SetText("-")
+    
+    inputs.maxLevel, maxContainer = CreateStyledInput(levelInputs, 38, 22)
+    inputs.maxLevel:SetAutoFocus(false)
+    inputs.maxLevel:SetNumeric(true)
+    inputs.maxLevel:SetMaxLetters(2)
+    maxContainer:SetPoint("LEFT", dash, "RIGHT", 2, 0)
+    inputs.maxLevel:SetScript("OnTabPressed", function(self)
+        inputs.playerName:SetFocus()
+    end)
+    inputs.maxLevel:SetScript("OnEnterPressed", function(self)
+        self:ClearFocus()
+        statsInstance:PerformSearch(inputs)
+    end)
+    inputs.maxLevel:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+    end)
+    
+    inputs.maxLevel:SetTextInsets(2, 2, 0, 0)
+    
+    local statsInstance = self
+    
+    local function SetupEnterHandler(input)
+        if input then
+            input:SetScript("OnEnterPressed", function(self)
+                self:ClearFocus()
+                statsInstance:PerformSearch(inputs)
+            end)
+        end
+    end
+    
+    SetupEnterHandler(inputs.playerName)
+    SetupEnterHandler(inputs.minLevel)
+    SetupEnterHandler(inputs.maxLevel)
+    SetupEnterHandler(inputs.zone)
+    SetupEnterHandler(inputs.guild)
+    
     local buttonY = padding.bottom + 10
     local searchButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     searchButton:SetPoint("BOTTOMLEFT", padding.left + 10, buttonY)
@@ -1016,12 +1016,12 @@ function Stats:PerformSearch(inputs)
     if zoneText and zoneText:trim() ~= "" then
         criteria.zone = trim(zoneText)
     end
-	
+    
     local guildText = inputs.guild:GetText()
     if guildText and guildText:trim() ~= "" then
         criteria.guild = trim(guildText)
     end
-
+    
     if inputs.class.selectedValue and inputs.class.selectedValue ~= "Все" then
         criteria.class = inputs.class.selectedValue
     end
@@ -1069,13 +1069,13 @@ function Stats:PerformSearch(inputs)
                     match = false
                 end
             end
-			
+            
             if criteria.guild then
-				if not parsed.guild:lower():find(criteria.guild:lower(), 1, true) then
-					match = false
-				end
-			end
-
+                if not parsed.guild:lower():find(criteria.guild:lower(), 1, true) then
+                    match = false
+                end
+            end
+            
             if criteria.class then
                 if parsed.class:lower() ~= criteria.class:lower() then
                     match = false
@@ -1108,7 +1108,7 @@ end
         -- local row = CreateFrame("Frame", nil, parent)
         -- row:SetSize(width, rowHeight)
         -- row:Hide()
-
+        
         -- row.bg = row:CreateTexture(nil, "BACKGROUND")
         -- row.bg:SetAllPoints()
         -- row.bg:SetTexture("Interface\\Buttons\\WHITE8X8")
@@ -1157,7 +1157,7 @@ function Stats:UpdateSearchResults(frame)
     end
     
     resultLabel:Hide()
-
+    
     if not self.searchResults or #self.searchResults == 0 then
         if headerFrame then headerFrame:Hide() end
         resultLabel:SetText(not self.searchResults and "Введите критерии поиска" or "|cFFFF0000Ничего не найдено|r")
@@ -1324,34 +1324,34 @@ function Stats:UpdateSearchResults(frame)
     scrollChild:SetHeight(totalHeight)
     scrollFrame:UpdateScrollChildRect()
     
-	local function UpdateVisibleRows()
-		if not frame:IsVisible() then return end
-		
-		local scrollOffset = scrollFrame:GetVerticalScroll()
-		local firstVisible = math.floor(scrollOffset / (rowHeight + verticalSpacing)) + 1
-		local lastVisible = math.min(firstVisible + visibleRows - 1, #self.searchResults)
-		
-		for _, row in ipairs(frame.rowPool) do
-			row:Hide()
-		end
-		
-		for i = firstVisible, lastVisible do
-			local poolIndex = i - firstVisible + 1
-			local row = frame.rowPool[poolIndex]
-			local entry = self.searchResults[i]
-			
-			if row and entry then
-				if not entry.parsed then
-					entry.parsed = {
-						class = self:ParseClassFromTooltip(entry.tooltip) or "Неизвестно",
-						cause = self:ParseCauseFromTooltip(entry.tooltip) or "Неизвестно",
-						level = self:ParseLevelFromEntry(entry) or 0,
-						zone = self:ParseZoneFromTooltip(entry.tooltip) or "",
-						source = self:ParseFactionCauseFromTooltip(entry.tooltip) or "",
-						guild = self:ParseGuildFromTooltip(entry.tooltip) or ""
-					}
-				end
-				
+    local function UpdateVisibleRows()
+        if not frame:IsVisible() then return end
+        
+        local scrollOffset = scrollFrame:GetVerticalScroll()
+        local firstVisible = math.floor(scrollOffset / (rowHeight + verticalSpacing)) + 1
+        local lastVisible = math.min(firstVisible + visibleRows - 1, #self.searchResults)
+        
+        for _, row in ipairs(frame.rowPool) do
+            row:Hide()
+        end
+        
+        for i = firstVisible, lastVisible do
+            local poolIndex = i - firstVisible + 1
+            local row = frame.rowPool[poolIndex]
+            local entry = self.searchResults[i]
+            
+            if row and entry then
+                if not entry.parsed then
+                    entry.parsed = {
+                        class = self:ParseClassFromTooltip(entry.tooltip) or "Неизвестно",
+                        cause = self:ParseCauseFromTooltip(entry.tooltip) or "Неизвестно",
+                        level = self:ParseLevelFromEntry(entry) or 0,
+                        zone = self:ParseZoneFromTooltip(entry.tooltip) or "",
+                        source = self:ParseFactionCauseFromTooltip(entry.tooltip) or "",
+                        guild = self:ParseGuildFromTooltip(entry.tooltip) or ""
+                    }
+                end
+                
                 local parsed = entry.parsed
                 
                 row.fields[1]:SetText(entry.playerName)
@@ -1366,7 +1366,7 @@ function Stats:UpdateSearchResults(frame)
                 local yOffset = - (i-1) * (rowHeight + verticalSpacing)
                 row:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, yOffset)
                 row:Show()
-    
+                
                 if parsed.level == 80 then
                     row.bg:SetVertexColor(0, 0.5, 0, 0.7)
                 else
@@ -1375,7 +1375,7 @@ function Stats:UpdateSearchResults(frame)
             end
         end
     end
-
+    
     local scrollBar = scrollFrame.ScrollBar
     if scrollBar then
         scrollBar:SetScript("OnValueChanged", function(self, value)
@@ -1408,14 +1408,13 @@ function Stats.new(parent, mainWindowRef)
     instance.frameWidth = screenWidth * 0.8
     instance.frameHeight = screenHeight * 0.65
     instance.mainWindowRef = mainWindowRef
-
+    
     instance.contentPadding = {left = 10, right = 10, top = 40, bottom = 10}
-
+    
     instance.statsFrame = CreateFrame("Frame", "DLStatsFrame", parent)
-	    instance.statsFrame:SetFrameStrata("DIALOG")
-
+    instance.statsFrame:SetFrameStrata("DIALOG")
     instance.statsFrame:SetSize(instance.frameWidth, instance.frameHeight)
-
+    
     if _G.DeathLoggerDB.statsWindowPosition then
         instance.statsFrame:SetPoint(unpack(_G.DeathLoggerDB.statsWindowPosition))
     else
@@ -1424,7 +1423,6 @@ function Stats.new(parent, mainWindowRef)
     
     instance.statsFrame:SetMovable(true)
     instance.statsFrame:SetClampedToScreen(true)
-
     instance.statsFrame.Background = instance.statsFrame:CreateTexture(nil, "BACKGROUND")
     instance.statsFrame.Background:SetAtlas("UI-EJ-BattleforAzeroth", true)
     instance.statsFrame.Background:SetAllPoints()
@@ -1436,7 +1434,7 @@ function Stats.new(parent, mainWindowRef)
         insets = {left = 4, right = 4, top = 4, bottom = 4}
     })
     instance.statsFrame:SetBackdropColor(0, 0, 0, 0.8)
-
+    
     instance.statsTitle = instance.statsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
     instance.statsTitle:SetPoint("TOP", 0, -10)
     instance.statsTitle:SetText("Статистика смертей")
@@ -1449,7 +1447,7 @@ function Stats.new(parent, mainWindowRef)
         _G.DLDialogFrame_v2:Show()
         _G.isFullWindow = false
     end)
-
+    
     local searchTab, searchTabText = instance:CreateVerticalTab(
         instance.statsFrame,
         "П\nо\nи\nс\nк",
@@ -1461,24 +1459,24 @@ function Stats.new(parent, mainWindowRef)
             instance.statsFrame:Hide()
             instance.searchTabText:SetText("Ста\nтис\nти\nка")
             
-		local currentPosition = {point, relativeToName, relativePoint, xOfs, yOfs}
-		
-		if DLSearchFrame then
-			DLSearchFrame:ClearAllPoints()
-			DLSearchFrame:SetPoint(unpack(currentPosition))
-			DLSearchFrame:Show()
-		else
-			DLSearchFrame = Stats:CreateSearchWindow(
-				parent, 
-				instance.frameWidth, 
-				instance.frameHeight, 
-				instance.contentPadding,
-				currentPosition
-			)
-			DLSearchFrame:Show()
-		end
-	end
-
+        local currentPosition = {point, relativeToName, relativePoint, xOfs, yOfs}
+        
+        if DLSearchFrame then
+            DLSearchFrame:ClearAllPoints()
+            DLSearchFrame:SetPoint(unpack(currentPosition))
+            DLSearchFrame:Show()
+        else
+            DLSearchFrame = Stats:CreateSearchWindow(
+                parent, 
+                instance.frameWidth, 
+                instance.frameHeight, 
+                instance.contentPadding,
+                currentPosition
+            )
+            DLSearchFrame:Show()
+        end
+    end
+    
     )
     instance.searchTabText = searchTabText
     
@@ -1515,11 +1513,11 @@ function Stats.new(parent, mainWindowRef)
     instance.statsFrame.instance = instance
     instance.currentChartType = "Фракции"
     
-	instance.statsFrame:SetScript("OnShow", function()
-		if DEBUG_MODE then print("|cFF00FF00DEBUG: Окно статистики открыто.|r") end
-		instance:UpdateStats()
-		instance.searchTabText:SetText("П\nо\nи\nс\nк")
-	end)
+    instance.statsFrame:SetScript("OnShow", function()
+        if DEBUG_MODE then print("|cFF00FF00DEBUG: Окно статистики открыто.|r") end
+        instance:UpdateStats()
+        instance.searchTabText:SetText("П\nо\nи\nс\nк")
+    end)
     instance.statsFrame:SetScript("OnHide", function()
         instance:ClearContent()
         instance:InitializeData()
