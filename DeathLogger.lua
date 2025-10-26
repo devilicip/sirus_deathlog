@@ -1,6 +1,7 @@
 -------------------------------------------------------------------------------------------------
 -- Copyright 2024-2025 Lyubimov Vladislav (grifon7676@gmail.com)
 -- Copyright 2025 Norzia (devilicip2@gmail.com) for sirus-wow
+-- Thanks to testers and Я сегодня не Умру guild
 --
 -- Permission is hereby granted, free of charge, to any person obtaining a copy of this software
 -- and associated documentation files (the “Software”), to deal in the Software without
@@ -53,13 +54,14 @@ elseif DEBUG then
 end
 
 local Options = {}
-local defaults = {}
+-- local defaults = {}
 local guildMembers = {}
 local isManualGuildRequest = false
 local isUpdatingGuild = false
 local lastGuildUpdateTime = 0
-local GUILD_UPDATE_THROTTLE = 2
 local guildUpdateFrame = CreateFrame("Frame")
+local GUILD_UPDATE_THROTTLE = 2
+local INITIAL_GUILD_DELAY = 8 
 local guildUpdateDelay = 0
 local guildUpdatePending = false
 widgetInstance = nil
@@ -73,9 +75,10 @@ DeathLoggerDB.entries = DeathLoggerDB.entries or {}
 parseGuild = ""
 local isLoggingOut = false
 local guildCache = DeathLoggerDB.guildCache or {}
-local deathOverlayFrames = {}
+-- local deathOverlayFrames = {}
 DeathLoggerDB.announceDeathToGuild = DeathLoggerDB.announceDeathToGuild or true
 _G.widgetInstance = nil
+
 
 local DL_EdgeGlow = nil
 local DL_EdgeGlowSettings = {
@@ -473,7 +476,7 @@ local function FormatData(data)
     if data.causeID == 7 then
         tooltip = tooltip .. "\nОт: " .. data.enemyName .. " " .. data.enemyLevel .. "-го уровня"
     end
-	
+    
     if parseGuild and parseGuild ~= "" then
         tooltip = tooltip .. "\nГильдия: " .. parseGuild
     end
@@ -521,15 +524,15 @@ function DeathLogWidget.new()
     local maxHeight = screenHeight * 0.7
     local initialWidth = DeathLoggerDB.width or (screenWidth * 0.6)
     local initialHeight = DeathLoggerDB.height or (screenHeight * 0.5)
-    local minWidthStat = screenWidth * 0.5
-    local minHeightStat = screenHeight * 0.4
-    local maxWidthStat = screenWidth * 0.8
-    local maxHeightStat = screenHeight * 0.7
+    -- local minWidthStat = screenWidth * 0.5
+    -- local minHeightStat = screenHeight * 0.4
+    -- local maxWidthStat = screenWidth * 0.8
+    -- local maxHeightStat = screenHeight * 0.7
     local statsWidth = screenWidth * 0.8
     local statsHeight = screenHeight * 0.65
-    local initialWidthStat = screenWidth * 0.6
-    local initialHeightStat = screenHeight * 0.5
-    local FULL_WINDOW_SPLIT = 0.6
+    -- local initialWidthStat = screenWidth * 0.6
+    -- local initialHeightStat = screenHeight * 0.5
+    -- local FULL_WINDOW_SPLIT = 0.6
     
     instance.mainWnd = CreateFrame("Frame", "DLDialogFrame_v2", UIParent)
     -- instance.mainWnd:SetFrameStrata("DIALOG")
@@ -746,6 +749,8 @@ function DeathLogWidget:AddTooltip(target, tooltip)
 end
 
 function DeathLogWidget:CreateTextFrame()
+    local phraseList = Utils.SplitString(phrases, "\n")
+
     local frame = CreateFrame("Frame", nil, self.scrollChild)
     frame:SetSize(self.scrollChild:GetWidth(), 14)
     frame:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT")
@@ -762,18 +767,57 @@ function DeathLogWidget:CreateTextFrame()
     frame.text:SetWordWrap(false)
     frame:SetScript("OnMouseUp", function(self, button)
         if button == "RightButton" and IsShiftKeyDown() then
-        if self.playerName then
-            -- /dlguild /dlinfo
-            isManualGuildRequest = true
-            SlashCmdList["DEATHLOGGERINFO"](self.playerName)
-        else
-            print("[DEBUG] Имя игрока не найдено")
-        end
+            if self.playerName then
+                isManualGuildRequest = true
+                SlashCmdList["DEATHLOGGERINFO"](self.playerName)
+            else
+                print("[DEBUG] Имя игрока не найдено")
+            end
         elseif button == "LeftButton" then
             if IsShiftKeyDown() then
                 if self.playerName then
-                    local messageSuffix = self.text:GetText():find("завершил") and " ГЦ" or " F"
-                    ChatFrame_OpenChat("/g " .. self.playerName .. messageSuffix, DEFAULT_CHAT_FRAME)
+                    local isCompleted = self.text:GetText():find("завершил")
+                    
+                    local messageSuffix
+                    if DeathLoggerDB.useRandomPhrases then
+                        local phrases = isCompleted and DeathLoggerDB.randomPhrasesCompleted or DeathLoggerDB.randomPhrasesDeath
+                        if phrases and phrases ~= "" then
+                            local phraseList = Utils.SplitString(phrases, "\n")
+                            
+                            if #phraseList > 0 then
+                                if DEBUG then
+                                    print("[DEBUG] Доступные фразы:")
+                                    for i, phrase in ipairs(phraseList) do
+                                        print(string.format("  [%d] '%s'", i, phrase))
+                                    end
+                                end
+                                
+                                local randomIndex = math.random(1, #phraseList)
+                                messageSuffix = phraseList[randomIndex]
+                                
+                                if DEBUG then
+                                    print(string.format("[DEBUG] Выбрана фраза [%d]: '%s'", randomIndex, messageSuffix))
+                                end
+                            end
+                        end
+                    end
+                    if not messageSuffix or messageSuffix == "" then
+                        messageSuffix = isCompleted and 
+                            (DeathLoggerDB.guildChatTextCompleted or "ГЦ") or 
+                            (DeathLoggerDB.guildChatTextDeath or "F")
+                    end
+                    
+                    messageSuffix = messageSuffix and strtrim(messageSuffix) or ""
+                    if messageSuffix == "" then
+                        messageSuffix = isCompleted and "ГЦ" or "F"
+                    end
+                    
+                    local chatMessage = "/g " .. self.playerName .. " " .. messageSuffix
+                    ChatFrame_OpenChat(chatMessage, DEFAULT_CHAT_FRAME)
+                    
+                    if DEBUG then
+                        print(string.format("[DEBUG] Отправка сообщения: %s", chatMessage))
+                    end
                 end
             else
                 if self.playerName then
@@ -850,7 +894,7 @@ function DeathLogWidget:AddEntry(data, tooltip, faction, playerName, parseGuild,
     end
 end
 
--- Дополнительно: добавить метод очистки пула либо проработать фоновую загрузку
+-- Дополнительно: добавить метод очистки пула либо проработать фоновую загрузку,возможно, чуть позже, пока не критично
 function DeathLogWidget:ClearPool()
     if self.textFrames then
         for i = #self.textFrames, 1, -1 do
@@ -988,7 +1032,6 @@ local function SaveEntry(data, tooltip, faction, playerName, parseGuild, class, 
     
     local clean_data = data:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
     
-    -- добавляем запись в базу с позицией timestamp
     local newEntry = {
         data = data,
         tooltip = tooltip,
@@ -1089,7 +1132,7 @@ local function OnDeath(text)
             -- синхронизация
             if Sync and Sync.SaveEntryWithSync then
                 dataMap.guild = GetCachedGuild(dataMap.name)
-	            dataMap.timestamp = time()
+                dataMap.timestamp = time()
                 Sync:SaveEntryWithSync(dataMap)
             end
             
@@ -1152,7 +1195,7 @@ local function OnComplete(text)
             -- синхронизация
             if Sync and Sync.SaveEntryWithSync then
                 dataMap.guild = GetCachedGuild(dataMap.name)
-	            dataMap.timestamp = time()
+                dataMap.timestamp = time()
                 Sync:SaveEntryWithSync(dataMap)
             end
             
@@ -1244,7 +1287,7 @@ local function SaveEntriesOnLogout()
     
     guildCache = {}
     DeathLoggerDB.guildCache = guildCache
-    Debug("Кэш гильдий очищен при выходе из игры")
+    -- Debug("Кэш гильдий очищен при выходе из игры")
     
     DeathLoggerDB.syncEnabled = DeathLoggerDB.syncEnabled
     DeathLoggerDB.autoSync = DeathLoggerDB.autoSync  
@@ -1259,6 +1302,7 @@ local function SaveEntriesOnLogout()
     DeathLoggerDB.height = DeathLoggerDB.height or DeathLoggerDB.minHeight
     DeathLoggerDB.HCBL_Settings = DeathLoggerDB.HCBL_Settings or {}
     Utils.CopyTable(HCBL_Settings, DeathLoggerDB.HCBL_Settings)
+    
 end
 
 function LoadEntries()
@@ -1287,7 +1331,7 @@ local function OnEvent(self, event, ...)
         if addonName == "DeathLogger" then
             DeathLoggerDB = DeathLoggerDB or {}
             DeathLoggerDB.HCBL_Settings = DeathLoggerDB.HCBL_Settings or {}
-			
+            
             Options = _G.DeathLogger_Options or {}
             local optionDefaults = Options.defaults or {}
             Utils.CopyTable(optionDefaults, DeathLoggerDB.HCBL_Settings)
@@ -1297,7 +1341,7 @@ local function OnEvent(self, event, ...)
             DeathLoggerDB.announceDeathToGuild = DeathLoggerDB.announceDeathToGuild or false
             
             -- инициализация синхронизации
-		    SortEntriesByTimestamp()
+            SortEntriesByTimestamp()
             if Sync and Sync.Init then
                 Sync:Init(self)
             end
@@ -1318,6 +1362,8 @@ local function OnEvent(self, event, ...)
             DeathLoggerDB.height = DeathLoggerDB.height or DeathLoggerDB.minHeight
             DeathLoggerDB.minimapIcon = DeathLoggerDB.minimapIcon or {}
             DeathLoggerDB.minimapIcon.minimapPos = DeathLoggerDB.minimapIcon.minimapPos or 333 
+            HCBL_Settings.guildChatTextCompleted = HCBL_Settings.guildChatTextCompleted or "ГЦ"
+            HCBL_Settings.guildChatTextDeath = HCBL_Settings.guildChatTextDeath or "F"
             
             if not original_ChatFrame_OnHyperlinkShow then
                 original_ChatFrame_OnHyperlinkShow = ChatFrame_OnHyperlinkShow
@@ -1394,28 +1440,43 @@ local function OnEvent(self, event, ...)
         if pendingRequest then
             ProcessWhoResults()
         end
-    elseif event == "GUILD_ROSTER_UPDATE" and not isUpdatingGuild then
-        local currentTime = GetTime()
-        if currentTime - lastGuildUpdateTime > GUILD_UPDATE_THROTTLE and not isUpdatingGuild then
-            lastGuildUpdateTime = currentTime
-            isUpdatingGuild = true
-            Debug("Начало обработки GUILD_ROSTER_UPDATE")
-            GuildRoster()
-            
+    elseif event == "GUILD_ROSTER_UPDATE" then
+        if isInitialGuildLoad then
             guildUpdatePending = true
             guildUpdateDelay = 0
             guildUpdateFrame:SetScript("OnUpdate", function(self, elapsed)
                 guildUpdateDelay = guildUpdateDelay + elapsed
-                if guildUpdateDelay >= 1 then
+                if guildUpdateDelay >= INITIAL_GUILD_DELAY then
                     self:SetScript("OnUpdate", nil)
                     if IsInGuild() then
                         UpdateGuildMembers()
-                        Debug("Гильдия обновлена. Участников: " .. #guildMembers)
+                        Debug("первоначальная загрузка гильдии завершена. Участников: " .. #guildMembers)
+                        isInitialGuildLoad = false
                     end
-                    isUpdatingGuild = false
                     guildUpdatePending = false
                 end
             end)
+        elseif not isUpdatingGuild then
+            local currentTime = GetTime()
+            if currentTime - lastGuildUpdateTime > GUILD_UPDATE_THROTTLE then
+                lastGuildUpdateTime = currentTime
+                isUpdatingGuild = true
+                
+                guildUpdatePending = true
+                guildUpdateDelay = 0
+                guildUpdateFrame:SetScript("OnUpdate", function(self, elapsed)
+                    guildUpdateDelay = guildUpdateDelay + elapsed
+                    if guildUpdateDelay >= 1 then
+                        self:SetScript("OnUpdate", nil)
+                        if IsInGuild() then
+                            UpdateGuildMembers()
+                            Debug("Гильдия обновлена. Участников: " .. #guildMembers)
+                        end
+                        isUpdatingGuild = false
+                        guildUpdatePending = false
+                    end
+                end)
+            end
         end
     elseif event == "PLAYER_ENTERING_WORLD" then
         local isLogin, isReload = ...
@@ -1424,11 +1485,23 @@ local function OnEvent(self, event, ...)
             local elapsed = 0
             delayFrame:SetScript("OnUpdate", function(self, delta)
                 elapsed = elapsed + delta
-                if elapsed >= 3 then  -- 3 сек задержки
+                
+                if elapsed >= 5 then -- задержка 5 секунд
                     self:SetScript("OnUpdate", nil)
-                    if DeathLoggerSync and DeathLoggerSync.RequestFullSync then
-                        DeathLoggerSync:RequestFullSync()
-                        Debug("автосинхронизация при входе в мир")
+                    
+                    if DeathLoggerDB.autoSync and DeathLoggerDB.syncEnabled and IsInGuild() then
+                        local syncTimer = CreateFrame("Frame")
+                        local syncElapsed = 0
+                        syncTimer:SetScript("OnUpdate", function(timer, timerDelta)
+                            syncElapsed = syncElapsed + timerDelta
+                            if syncElapsed >= 3 then -- задержка 3 секунды
+                                timer:SetScript("OnUpdate", nil)
+                                if DeathLoggerSync and DeathLoggerSync.RequestFullSync then
+                                    DeathLoggerSync:RequestFullSync()
+                                    Debug("Автосинхронизация отложена на 5+3 секунд")
+                                end
+                            end
+                        end)
                     end
                 end
             end)

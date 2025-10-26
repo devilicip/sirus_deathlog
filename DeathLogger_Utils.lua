@@ -22,8 +22,8 @@ local addonName = "DeathLogger"
 
 local Utils = {}
 
-local isRequestActive = false
-Utils.guildCache = {}
+-- local isRequestActive = false
+-- Utils.guildCache = {}
 
 Utils.classes = {
     [1] = "Воин",
@@ -231,6 +231,39 @@ if not Utils.TableCount then
         end
         return count
     end
+end
+
+function Utils.SplitString(str, delimiter)
+    if not str or type(str) ~= "string" then
+        return {}
+    end
+    
+    delimiter = delimiter or "\n"
+    local result = {}
+    
+    if str:trim() == "" then
+        return result
+    end
+    
+    local pattern = "(.-)" .. delimiter .. "()"
+    local lastPos = 1
+    
+    for part, pos in string.gmatch(str .. delimiter, pattern) do
+        local trimmedPart = part:trim()
+        if trimmedPart ~= "" then
+            table.insert(result, trimmedPart)
+        end
+        lastPos = pos
+    end
+    
+    return result
+end
+
+function Utils.TrimString(str)
+    if not str or type(str) ~= "string" then
+        return str
+    end
+    return str:match("^%s*(.-)%s*$") or str
 end
 
 _G[addonName.."_Utils"] = Utils

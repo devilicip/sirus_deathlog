@@ -29,7 +29,7 @@ DeathLoggerSync.progressBar = nil
 DeathLoggerSync.progressText = nil
 
 DeathLoggerSync.PREFIX = "ASMSG_TOSEND_DL_SYNC"
-DeathLoggerSync.VERSION = 3
+DeathLoggerSync.VERSION = 4
 DeathLoggerSync.THROTTLE = 1.5
 DeathLoggerSync.lastSyncTime = 0
 DeathLoggerSync.MAX_SYNC_ENTRIES = 200 -- максимальное количество записей для синхры
@@ -94,7 +94,7 @@ function DeathLoggerSync:Init(mainAddon)
     end
     
     SortMainEntries()
-
+    
     self.eventFrame = self.eventFrame or CreateFrame("Frame")
     self.eventFrame:RegisterEvent("CHAT_MSG_ADDON")
     self.eventFrame:SetScript("OnEvent", function(_, event, ...)
@@ -147,7 +147,7 @@ local function CreateDLNotificationsystem()
     DLoggernotificationFrame.progressBar:SetStatusBarColor(0, 0.6, 0, 1)
     DLoggernotificationFrame.progressBar:SetMinMaxValues(0, 100)
     DLoggernotificationFrame.progressBar:SetValue(0)
-	
+    
     DLoggernotificationFrame.progressBar.background = CreateFrame("Frame", nil, DLoggernotificationFrame.progressBar)
     DLoggernotificationFrame.progressBar.background:SetPoint("TOPLEFT", -4, 4)
     DLoggernotificationFrame.progressBar.background:SetPoint("BOTTOMRIGHT", 4, -4)
@@ -426,12 +426,13 @@ function DeathLoggerSync:SerializeDeathData(entryData, msgType)
     local timestamp = entryData.timestamp or time()
     
     if entryData.causeID == 0 then
-        local syncData = string.format("%s:%d:%d:%d:%d::%d:%d",
+        local syncData = string.format("%s:%d:%d:%d:%d:%d:%d:%d",
             entryData.playerName or "",
             entryData.raceID or 0,
             entryData.factionID or 0,
             classID,
             entryData.level or 0,
+            0,
             entryData.causeID or 0,
             timestamp
         )
@@ -443,9 +444,10 @@ function DeathLoggerSync:SerializeDeathData(entryData, msgType)
             guildName
         )
         
-        -- DebugSync("Сериализованы данные завершения испытания:", finalMessage)
+        DebugSync("Сериализованы данные завершения испытания:", finalMessage)
         return finalMessage
     end
+    
     
     local syncData = string.format("%s:%d:%d:%d:%d:%s:%d:%d",
         entryData.playerName or "",
@@ -510,7 +512,7 @@ function DeathLoggerSync:DeserializeDeathData(message)
         table.insert(parts, part)
     end
     
-    local isTrialCompletion = (#parts == 8 and parts[6] == "") or (#parts == 7 and not parts[6]:match("%d"))
+    local isTrialCompletion = (#parts >= 8 and tonumber(parts[7]) == 0)
     
     if isTrialCompletion then
         local entryData = {
@@ -527,8 +529,9 @@ function DeathLoggerSync:DeserializeDeathData(message)
             msgType = msgType
         }
         
-        -- DebugSync("Десериализовано завершение испытания:", entryData.playerName, "Тип:", msgType)
-        return entryData
+        DebugSync("Десериализовано завершение испытания:", entryData.playerName, "Тип:", msgType)
+            return entryData
+            
     else
         local hasTimestamp = #parts >= 8
         local minParts = hasTimestamp and 8 or 7
@@ -727,16 +730,6 @@ function DeathLoggerSync:AddToMainList(entryData)
     return false
 end
 
-function DeathLoggerSync:SortMainEntries()
-    if not DeathLoggerDB.entries or #DeathLoggerDB.entries <= 1 then
-        return
-    end
-    
-    table.sort(DeathLoggerDB.entries, function(a, b)
-        return (a.timestamp or 0) > (b.timestamp or 0)
-    end)
-end
-
 -- запросы 
 function DeathLoggerSync:SyncNewEntry(entryData)
     DebugSync("Попытка синхронизации записи:", entryData.playerName)
@@ -806,7 +799,7 @@ function DeathLoggerSync:OnSyncMessage(prefix, message, channel, sender)
         -- DebugSync("Собственное сообщение, игнорируем")
         return
     end
-
+    
     -- DebugSync("Получено сообщение от:", sender, "Содержимое:", message)
     
     local version, msgType, count
@@ -827,14 +820,26 @@ function DeathLoggerSync:OnSyncMessage(prefix, message, channel, sender)
         return
     end
     
-if msgType == self.MSG_TYPE.COUNT then
-    count = tonumber(count)
-    if not count then
-        DebugSync("Не удалось извлечь количество записей из сообщения COUNT, используем 50")
-        count = 50
-    end
-
-    DebugSync("Получено количество записей от:", sender, "Количество:", count)
+    if msgType == self.MSG_TYPE.COUNT then
+        count = tonumber(count)
+        local messageTarget = nil
+        
+        for part in message:gmatch("([^|]+)") do
+            local k, v = part:match("^([^=]+)=(.+)$")
+            if k == "target" then messageTarget = v end
+        end
+        
+        if messageTarget and messageTarget ~= UnitName("player") then
+            DebugSync("Сообщение COUNT предназначено другому игроку:", messageTarget, "игнорируем")
+            return
+        end
+        
+        if not count then
+            DebugSync("Не удалось извлечь количество записей из сообщения COUNT, используем 50")
+            count = 50
+        end
+    
+    DebugSync("Получено количество записей от:", sender, "Количество:", count, "Цель:", messageTarget)
     
     self.receivingSync = {
         total = count,
@@ -847,72 +852,85 @@ if msgType == self.MSG_TYPE.COUNT then
     ShowSyncProgressNotification("Получение истории", 
         string.format("Получение данных от |cffFFD100%s|r (%d записей)", sender, count), 
         0, 15)
-		
+        
         elseif msgType == self.MSG_TYPE.FULL_ENTRY then
             -- DebugSync("Получена запись из полной истории от:", sender)
-            
-            if not self.receivingSync then
-                local entryData = self:DeserializeDeathData(message)
-                if entryData then
-                    self:ProcessIncomingEntry(entryData, sender)
-                else
-                    DebugSync("Ошибка десериализации записи полной истории")
-                end
-                return
-            end
-            
-            if self.receivingSync.sender ~= sender then
-                DebugSync("Получена запись от другого отправителя, игнорируем")
-                return
-            end
-            
-            self.receivingSync.received = (self.receivingSync.received or 0) + 1
-            self.receivingSync.lastReceivedTime = GetTime()
-            
-            if self.receivingSync.total and self.receivingSync.total > 0 then
-                local progress = math.min(100, (self.receivingSync.received / self.receivingSync.total) * 100)
-                self:UpdateProgressBar(progress)
-            end
-            
-            local entryData = self:DeserializeDeathData(message)
-            if entryData then
-                self:ProcessIncomingEntry(entryData, sender)
-            else
-                DebugSync("Ошибка десериализации записи полной истории")
-            end
-            
-            if self.receivingSync.total and self.receivingSync.received >= self.receivingSync.total then
-                if self.DLNotifications and self.DLNotifications:IsShown() then
-                    self.DLNotifications.text:SetText("Синхронизация завершена")
-                    self.DLNotifications.startTime = GetTime()
-                    self.DLNotifications.duration = 5.0
-                end
-            self.receivingSync = nil
-            DebugSync("Получение всех записей завершено")
-            end
-			
-        elseif msgType == self.MSG_TYPE.REQUEST_FULL then
-            DebugSync("Получен запрос полной истории от:", sender)
-            self:SendFullHistory(sender)
-            
-        elseif msgType == self.MSG_TYPE.NEW_ENTRY then
-            DebugSync("Получена новая запись от:", sender)
-            
-            -- для одиночных записей проверяем уровень игрока
-            local playerLevel = UnitLevel("player")
-            local maxLevel = MAX_PLAYER_LEVEL_TABLE[GetExpansionLevel()] or 80
-            
-            if playerLevel < maxLevel then
-                DebugSync("Получение одиночной записи отменено: игрок не максимального уровня")
-                return
-            end
-            
-            local entryData = self:DeserializeDeathData(message)
-            if entryData then
-                self:ProcessIncomingEntry(entryData, sender)
-            else
-                DebugSync("Ошибка десериализации записи")
-            end
+    local messageTarget = nil
+    
+    for part in message:gmatch("([^|]+)") do
+        local k, v = part:match("^([^=]+)=(.+)$")
+        if k == "target" then messageTarget = v end
+    end
+    
+    if messageTarget and messageTarget ~= UnitName("player") then
+        DebugSync("Сообщение FULL_ENTRY предназначено другому игроку:", messageTarget, "игнорируем")
+        return
+    end
+    
+    DebugSync("Получена запись из полной истории от:", sender, "Цель:", messageTarget)
+    
+    if not self.receivingSync then
+        local entryData = self:DeserializeDeathData(message)
+        if entryData then
+            self:ProcessIncomingEntry(entryData, sender)
+        else
+            DebugSync("Ошибка десериализации записи полной истории")
+        end
+        return
+    end
+    
+    if self.receivingSync.sender ~= sender then
+        DebugSync("Получена запись от другого отправителя, игнорируем")
+        return
+    end
+    
+    self.receivingSync.received = (self.receivingSync.received or 0) + 1
+    self.receivingSync.lastReceivedTime = GetTime()
+    
+    if self.receivingSync.total and self.receivingSync.total > 0 then
+        local progress = math.min(100, (self.receivingSync.received / self.receivingSync.total) * 100)
+        self:UpdateProgressBar(progress)
+    end
+    
+    local entryData = self:DeserializeDeathData(message)
+    if entryData then
+        self:ProcessIncomingEntry(entryData, sender)
+    else
+        DebugSync("Ошибка десериализации записи полной истории")
+    end
+    
+    if self.receivingSync.total and self.receivingSync.received >= self.receivingSync.total then
+        if self.DLNotifications and self.DLNotifications:IsShown() then
+            self.DLNotifications.text:SetText("Синхронизация завершена")
+            self.DLNotifications.startTime = GetTime()
+            self.DLNotifications.duration = 5.0
+        end
+        self.receivingSync = nil
+        DebugSync("Получение всех записей завершено")
+    end
+    
+    elseif msgType == self.MSG_TYPE.REQUEST_FULL then
+        DebugSync("Получен запрос полной истории от:", sender)
+        self:SendFullHistory(sender)
+        
+    elseif msgType == self.MSG_TYPE.NEW_ENTRY then
+        DebugSync("Получена новая запись от:", sender)
+        
+        -- для одиночных записей проверяем уровень игрока
+        local playerLevel = UnitLevel("player")
+        local maxLevel = MAX_PLAYER_LEVEL_TABLE[GetExpansionLevel()] or 80
+        
+        if playerLevel < maxLevel then
+            DebugSync("Получение одиночной записи отменено: игрок не максимального уровня")
+            return
+        end
+        
+        local entryData = self:DeserializeDeathData(message)
+        if entryData then
+            self:ProcessIncomingEntry(entryData, sender)
+        else
+            DebugSync("Ошибка десериализации записи")
+        end
     else
         DebugSync("Неизвестный тип сообщения:", msgType)
     end
@@ -988,7 +1006,7 @@ function DeathLoggerSync:SendFullHistory(target)
     
     self.sendFrame:SetScript("OnUpdate", nil)
     
-    DebugSync("Отправляю историю sync базы для", target or "гильдии")
+    DebugSync("Отправляю историю sync базы для", target)
     DebugSync("Всего записей в sync базе:", #DeathLoggerDB.syncEntries)
     DebugSync("Валидных записей:", #validEntries)
     
@@ -1001,21 +1019,25 @@ function DeathLoggerSync:SendFullHistory(target)
     end
     
     local actualCount = #entriesToSend
-    local countMessage = string.format("v=%d|t=%s|count=%d",
-        self.VERSION, self.MSG_TYPE.COUNT, actualCount)
+    
+    -- Отправляем сообщение COUNT через гильдию но с указанием цели
+    local countMessage = string.format("v=%d|t=%s|count=%d|target=%s",
+        self.VERSION, self.MSG_TYPE.COUNT, actualCount, target or "")
+    
     SendAddonMessage(self.PREFIX, countMessage, "GUILD")
-    DebugSync("Будет отправлено количество записей:", actualCount)
+    DebugSync("Отправлено количество записей для игрока:", target, "Количество:", actualCount)
     
     ShowSyncProgressNotification("Отправка истории", 
-        string.format("Отправка данных синхронизации (%d записей)", actualCount), 
+        string.format("Отправка данных для |cffFFD100%s|r (%d записей)", target, actualCount), 
         0, 15)
     
     self.sendData = {
         entries = entriesToSend,
         sent = 0,
         maxEntries = actualCount,
-        delay = 0.2,
-        lastSendTime = 0
+        delay = 0.3,
+        lastSendTime = 0,
+        target = target
     }
     
     self.sendFrame:SetScript("OnUpdate", function(frame, elapsed)
@@ -1029,8 +1051,9 @@ function DeathLoggerSync:SendFullHistory(target)
             if entry then
                 local message = self:SerializeDeathData(entry, self.MSG_TYPE.FULL_ENTRY)
                 if message then
-                    SendAddonMessage(self.PREFIX, message, "GUILD")
-                    -- DebugSync("Отправлена запись", self.sendData.sent, "из", self.sendData.maxEntries, ":", entry.playerName)
+                    local targetedMessage = message .. "|target=" .. (self.sendData.target or "")
+                    SendAddonMessage(self.PREFIX, targetedMessage, "GUILD")
+                    DebugSync("Отправлена запись", self.sendData.sent, "из", self.sendData.maxEntries, "для игрока:", self.sendData.target, ":", entry.playerName)
                 end
             end
             
@@ -1040,10 +1063,10 @@ function DeathLoggerSync:SendFullHistory(target)
             if self.sendData.sent >= self.sendData.maxEntries then
                 frame:SetScript("OnUpdate", nil)
                 self.sendData = nil
-                DebugSync("Отправка истории sync базы завершена")
+                DebugSync("Отправка истории завершена для:", target)
                 
                 if self.DLNotifications and self.DLNotifications:IsShown() then
-                    self.DLNotifications.text:SetText("Отправка завершена")
+                    self.DLNotifications.text:SetText(string.format("Отправка для |cffFFD100%s|r завершена", target))
                     self.DLNotifications.startTime = GetTime()
                     self.DLNotifications.duration = 5.0
                 end
@@ -1066,7 +1089,7 @@ function DeathLoggerSync:SendFullHistory(target)
     end)
 end
 
---отображение сохраненных записей синхронизации
+-- отображение сохраненных записей синхронизации
 function DeathLoggerSync:ShowSyncEntries(numEntries)
     numEntries = numEntries or 50
     
@@ -1126,7 +1149,6 @@ function DeathLoggerSync:GetDuplicateKey(entryData)
         strlower(entryData.class or ""),
         strlower(entryData.playerName or ""))
 end
-
 
 function DeathLoggerSync:ProcessIncomingEntry(entryData, sender)
     DebugSync("Обработка входящей записи от:", sender, "Игрок:", entryData.playerName, "Тип:", entryData.msgType)
@@ -1236,7 +1258,7 @@ function DeathLoggerSync:FormatEntryForMainUI(entryData)
         mainStr = mainStr .. " |cffffcc00<"..entryData.guild..">|r"
         tooltip = tooltip .. "\nГильдия: " .. entryData.guild
     end
-	
+    
     return mainStr, tooltip, entryData.playerName, className, side
 end
 
@@ -1332,44 +1354,44 @@ eventFrame:SetScript("OnEvent", function(_, event)
 end)
 
 -- API
-DeathLoggerSync.API = {
-    ToggleDebug = function() DeathLoggerSync:ToggleDebug() end,
-    ShowSyncStats = function() DeathLoggerSync:ShowSyncStats() end,
-    ShowSyncEntries = function(num) DeathLoggerSync:ShowSyncEntries(num) end,
-    ClearAllSyncData = function() DeathLoggerSync:ClearAllSyncData() end,
-    ToggleSync = function() DeathLoggerSync:ToggleSync() end,
-    ToggleNotifications = function() DeathLoggerSync:ToggleNotifications() end,
-    RequestFullSync = function() DeathLoggerSync:RequestFullSync() end
-}
+-- DeathLoggerSync.API = {
+    -- ToggleDebug = function() DeathLoggerSync:ToggleDebug() end,
+    -- ShowSyncStats = function() DeathLoggerSync:ShowSyncStats() end,
+    -- ShowSyncEntries = function(num) DeathLoggerSync:ShowSyncEntries(num) end,
+    -- ClearAllSyncData = function() DeathLoggerSync:ClearAllSyncData() end,
+    -- ToggleSync = function() DeathLoggerSync:ToggleSync() end,
+    -- ToggleNotifications = function() DeathLoggerSync:ToggleNotifications() end,
+    -- RequestFullSync = function() DeathLoggerSync:RequestFullSync() end
+-- }
 
--- отладка  -- переделать на простую отладку к релизу
-SLASH_DEATHLOGGERSYNC1 = "/dlsync"
-SlashCmdList["DEATHLOGGERSYNC"] = function(msg)
-    local command = strlower(msg or "")
+-- отладка  -- переделать на простую отладку к релизу либо закомментить
+-- SLASH_DEATHLOGGERSYNC1 = "/dlsync"
+-- SlashCmdList["DEATHLOGGERSYNC"] = function(msg)
+    -- local command = strlower(msg or "")
     
-    if command == "debug" then
-        DeathLoggerSync.API.ToggleDebug()
-    elseif command == "stats" then
-        DeathLoggerSync.API.ShowSyncStats()
-    elseif command:find("^show") then
-        local num = tonumber(command:match("show%s+(%d+)")) or 50
-        DeathLoggerSync.API.ShowSyncEntries(num)
-    elseif command == "clear" then
-        DeathLoggerSync.API.ClearAllSyncData()
-    elseif command == "toggle" then
-        DeathLoggerSync.API.ToggleSync()
-    elseif command == "notify" then
-        DeathLoggerSync.API.ToggleNotifications()
-    elseif command == "request" then
-        DeathLoggerSync.API.RequestFullSync()
-    else
-        print("|cff00ccff[DeathLogger Sync]|r Команды:")
-        print("|cff00ccff/dlsync debug|r - переключить отладку")
-        print("|cff00ccff/dlsync stats|r - показать статистику")
-        print("|cff00ccff/dlsync show [число]|r - показать записи")
-        print("|cff00ccff/dlsync clear|r - очистить данные")
-        print("|cff00ccff/dlsync toggle|r - переключить синхронизацию")
-        print("|cff00ccff/dlsync notify|r - переключить уведомления")
-        print("|cff00ccff/dlsync request|r - запросить историю")
-    end
-end
+    -- if command == "debug" then
+        -- DeathLoggerSync.API.ToggleDebug()
+    -- elseif command == "stats" then
+        -- DeathLoggerSync.API.ShowSyncStats()
+    -- elseif command:find("^show") then
+        -- local num = tonumber(command:match("show%s+(%d+)")) or 50
+        -- DeathLoggerSync.API.ShowSyncEntries(num)
+    -- elseif command == "clear" then
+        -- DeathLoggerSync.API.ClearAllSyncData()
+    -- elseif command == "toggle" then
+        -- DeathLoggerSync.API.ToggleSync()
+    -- elseif command == "notify" then
+        -- DeathLoggerSync.API.ToggleNotifications()
+    -- elseif command == "request" then
+        -- DeathLoggerSync.API.RequestFullSync()
+    -- else
+        -- print("|cff00ccff[DeathLogger Sync]|r Команды:")
+        -- print("|cff00ccff/dlsync debug|r - переключить отладку")
+        -- print("|cff00ccff/dlsync stats|r - показать статистику")
+        -- print("|cff00ccff/dlsync show [число]|r - показать записи")
+        -- print("|cff00ccff/dlsync clear|r - очистить данные")
+        -- print("|cff00ccff/dlsync toggle|r - переключить синхронизацию")
+        -- print("|cff00ccff/dlsync notify|r - переключить уведомления")
+        -- print("|cff00ccff/dlsync request|r - запросить историю")
+    -- end
+-- end

@@ -1,9 +1,9 @@
 ## Interface: 30300
-## Title: |cffbf1919Death Logger|r
-## Notes: Logs deaths on a Sirus hardcore server 
+## Title: |cffbf1919Death |r|cff00ff00Logger|r
+## Notes: Логирование смертей ХК испытания |n/dl для включения/выключения виджета, или через значок DL около миникарты
 ## Author: github.com/LyubimovVladislav
 ## With addition by Norzia devilicip2@gmail.com for Sirus-wow github.com/devilicip/sirus_deathlog/
-## Version: 1.815
+## Version: 1.893
 ## SavedVariables: DeathLoggerDB
 
 Libs\LibStub\LibStub.lua
