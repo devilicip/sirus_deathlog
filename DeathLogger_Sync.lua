@@ -696,6 +696,7 @@ function DeathLoggerSync:AddToMainList(entryData)
     local formattedData, tooltip, playerName, class, side = self:FormatEntryForMainUI(entryData)
     
     if formattedData then
+        local loc, mx, my = Utils.ParseLocation(entryData.locationStr or "")
         local mainEntry = {
             data = formattedData,
             tooltip = tooltip,
@@ -703,7 +704,11 @@ function DeathLoggerSync:AddToMainList(entryData)
             playerName = playerName,
             parseGuild = entryData.guild or "",
             class = class,
-            timestamp = entryData.timestamp or time()
+            timestamp = entryData.timestamp or time(),
+            locationStr = loc or entryData.locationStr,
+            mapX = mx,
+            mapY = my,
+            isGuild = Utils.IsGuildDeath(playerName, entryData.guild, tooltip, formattedData)
         }
         
         local insertIndex = 1

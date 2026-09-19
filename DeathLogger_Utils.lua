@@ -22,6 +22,13 @@ local addonName = "DeathLogger"
 
 local Utils = {}
 
+if not string.trim then
+    function string.trim(s)
+        if not s or type(s) ~= "string" then return s end
+        return s:match("^%s*(.-)%s*$") or s
+    end
+end
+
 -- local isRequestActive = false
 -- Utils.guildCache = {}
 
@@ -165,7 +172,38 @@ function Utils.StringToMap(str)
     end
     tbl.name = Utils.ExtractName(str)
     tbl.causeID = tbl.causeID or 0
+    if tbl.locationStr then
+        local loc, x, y = Utils.ParseLocation(tbl.locationStr)
+        tbl.locationStr = loc or tbl.locationStr
+        tbl.mapX = x
+        tbl.mapY = y
+    end
     return tbl
+end
+
+function Utils.ParseLocation(locationStr)
+    if not locationStr or type(locationStr) ~= "string" then
+        return locationStr, nil, nil
+    end
+    local loc, xs, ys = locationStr:match("^(.-)%s*%(?([%d%.]+)%s*[,/]%s*([%d%.]+)%)?%s*$")
+    if loc and xs and ys then
+        local x, y = tonumber(xs), tonumber(ys)
+        if x and y then
+            if x > 1 or y > 1 then
+                x, y = x / 100, y / 100
+            end
+            if x >= 0 and x <= 1 and y >= 0 and y <= 1 then
+                return loc:match("^%s*(.-)%s*$"), x, y
+            end
+        end
+    end
+    return locationStr, nil, nil
+end
+
+function Utils.NormalizeName(name)
+    if not name or type(name) ~= "string" then return "" end
+    name = name:match("^([^%-]+)") or name
+    return strlower(name)
 end
 
 function Utils.TimeNow()
@@ -188,14 +226,36 @@ function Utils.GetRaceData(id)
 end
 
 function Utils.IsPlayerInGuild(targetName)
-    if IsInGuild() then
-        local numMembers = GetNumGuildMembers()
-        for i = 1, numMembers do
-            local name = GetGuildRosterInfo(i)
-            if name == targetName then
-                return true
-            end
+    if not targetName or not IsInGuild() then
+        return false
+    end
+    local target = Utils.NormalizeName(targetName)
+    local numMembers = GetNumGuildMembers()
+    for i = 1, numMembers do
+        local name = GetGuildRosterInfo(i)
+        if name and Utils.NormalizeName(name) == target then
+            return true
         end
+    end
+    return false
+end
+
+function Utils.IsGuildDeath(playerName, parseGuild, tooltip, data, isGuildFlag)
+    if isGuildFlag then
+        return true
+    end
+    if data and type(data) == "string" and data:find("[Гильдия]", 1, true) then
+        return true
+    end
+    if Utils.IsPlayerInGuild(playerName) then
+        return true
+    end
+    local myGuild = GetGuildInfo("player")
+    if myGuild and parseGuild and parseGuild ~= "" and parseGuild == myGuild then
+        return true
+    end
+    if myGuild and tooltip and tooltip:find("Гильдия: " .. myGuild, 1, true) then
+        return true
     end
     return false
 end
@@ -241,7 +301,7 @@ function Utils.SplitString(str, delimiter)
     delimiter = delimiter or "\n"
     local result = {}
     
-    if str:trim() == "" then
+    if Utils.TrimString(str) == "" then
         return result
     end
     
@@ -249,7 +309,7 @@ function Utils.SplitString(str, delimiter)
     local lastPos = 1
     
     for part, pos in string.gmatch(str .. delimiter, pattern) do
-        local trimmedPart = part:trim()
+        local trimmedPart = Utils.TrimString(part)
         if trimmedPart ~= "" then
             table.insert(result, trimmedPart)
         end

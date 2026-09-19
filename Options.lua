@@ -47,7 +47,7 @@ local defaults = {
     fontShadow = true,
     fontStyle = "NORMAL",
     scaleFactor = 1.0,
-    dl_ver = 1.893,
+    dl_ver = 1.894,
     guildChatTextCompleted = "ГЦ",
     guildChatTextDeath = "F",
     useRandomPhrases = false,
@@ -492,13 +492,13 @@ local function CreateGeneralTab(tab)
     guildOnlyText:SetPoint("LEFT", guildOnlyCheckbox, "RIGHT", 5, 0)
     guildOnlyText:SetText("Показывать только гильдейские смерти")
     guildOnlyCheckbox:SetScript("OnClick", function(self)
-        DeathLoggerDB.guildOnly = self:GetChecked()
+        DeathLoggerDB.guildOnly = self:GetChecked() and true or false
         if _G.widgetInstance then
-            _G.widgetInstance:ApplyFilter(function(entry) return true end)
+            _G.widgetInstance:ApplyFilter(_G.widgetInstance.currentFilterId or 1)
         end
     end)
     
-    guildOnlyCheckbox.tooltipText = "Если включено, фильтр применяется только к текущему составу гильдии.\n\n|cFF00FF00Примечание:|r Если игрок удалил игрового персонажа фильтр не будет применяться."
+    guildOnlyCheckbox.tooltipText = "Если включено, в основном окне и на карте отображаются только смерти членов гильдии.\n\nМетка [Гильдия] сохраняется в записи, поэтому фильтр работает и после удаления персонажа."
     guildOnlyCheckbox:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText(self.tooltipText, nil, nil, nil, nil, true)

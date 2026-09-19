@@ -38,6 +38,7 @@ Debug("LibWho status:", wholib and "LOADED" or "MISSING")
 local Utils = _G[addonName.."_Utils"] or {}
 local Stats = _G[addonName.."_Stats"] or {}
 local Sync = _G.DeathLoggerSync or {}
+local Map = _G.DeathLoggerMap or {}
 
 if not next(Utils) then
     error("|cFFFF0000Не удалось загрузить DeathLogger_Utils.lua!|r")
@@ -74,9 +75,9 @@ _G.DeathLoggerDB = DeathLoggerDB or {}
 DeathLoggerDB.entries = DeathLoggerDB.entries or {}
 parseGuild = ""
 local isLoggingOut = false
+local isInitialGuildLoad = true
 local guildCache = DeathLoggerDB.guildCache or {}
 -- local deathOverlayFrames = {}
-DeathLoggerDB.announceDeathToGuild = DeathLoggerDB.announceDeathToGuild or true
 _G.widgetInstance = nil
 
 
@@ -342,15 +343,11 @@ local function GetCachedGuild(playerName)
         return guildCache[playerName]
     end
     
-    if IsInGuild() then
-        for i = 1, GetNumGuildMembers() do
-            local name, _, _, _, _, _, _, _, online, _, _, _, _, _, _, guild = GetGuildRosterInfo(i)
-            if name and name == playerName then
-                guildCache[playerName] = guild or ""
-                Debug("Гильдия из гильд-листа для", playerName, ":", guildCache[playerName])
-                return guildCache[playerName]
-            end
-        end
+    if IsInGuild() and Utils.IsPlayerInGuild(playerName) then
+        local myGuild = GetGuildInfo("player") or ""
+        guildCache[playerName] = myGuild
+        Debug("Гильдия из гильд-листа для", playerName, ":", guildCache[playerName])
+        return guildCache[playerName]
     end
     
     Debug("Гильдия не найдена для", playerName)
@@ -405,7 +402,7 @@ end
     -- end
 -- end
 
-local function UpdateGuildMembers() -- проверка только из онлайна  
+local function UpdateGuildMembers()
     if not IsInGuild() then 
         guildMembers = {}
         return 
@@ -416,15 +413,15 @@ local function UpdateGuildMembers() -- проверка только из онл
     
     local newMembers = {}
     for i = 1, numMembers do
-        local name, _, _, _, _, _, _, _, online = GetGuildRosterInfo(i)
-        if name and online then 
+        local name = GetGuildRosterInfo(i)
+        if name then 
             table.insert(newMembers, name)
         end
     end
     
     if #newMembers ~= #guildMembers or not Utils.TablesEqual(newMembers, guildMembers) then
         guildMembers = newMembers
-        Debug("Список гильдии обновлен. Онлайн участников: " .. #guildMembers)
+        Debug("Список гильдии обновлен. Участников: " .. #guildMembers)
     end
 end
 
@@ -664,10 +661,37 @@ function DeathLogWidget.new()
         instance.hordeBtn, "TOPLEFT", -5, 0
     )
     instance.allBtn.filterId = FILTERS.ALL
+
+    instance.guildBtn = instance:CreateFilterButton(
+        instance:GetGuildFilterIcon(),
+        "Только смерти гильдии",
+        function()
+            DeathLoggerDB.guildOnly = not DeathLoggerDB.guildOnly
+            instance:ApplyFilter(instance.currentFilterId)
+            if Map and Map.Refresh then
+                Map.Refresh()
+            end
+        end,
+        instance.allBtn, "TOPLEFT", -5, 0
+    )
+    
+    instance.mapButton = CreateFrame("Button", nil, instance.mainWnd, "GameMenuButtonTemplate")
+    instance.mapButton:SetSize(60, 22)
+    instance.mapButton:SetPoint("TOPRIGHT", instance.guildBtn, "TOPLEFT", -5, 0)
+    instance.mapButton:SetText("Карта")
+    instance.mapButton:SetNormalFontObject("GameFontNormal")
+    instance.mapButton:SetHighlightFontObject("GameFontHighlight")
+    instance.mapButton:SetScript("OnClick", function()
+        if Map and Map.Open then
+            Map.Open()
+        elseif WorldMapFrame then
+            ToggleFrame(WorldMapFrame)
+        end
+    end)
     
     instance.toggleSizeButton = CreateFrame("Button", nil, instance.mainWnd, "GameMenuButtonTemplate")
     instance.toggleSizeButton:SetSize(100, 22)
-    instance.toggleSizeButton:SetPoint("TOPRIGHT", instance.allBtn, "TOPLEFT", -5, 0)
+    instance.toggleSizeButton:SetPoint("TOPRIGHT", instance.mapButton, "TOPLEFT", -5, 0)
     instance.toggleSizeButton:SetText("Статистика")
     instance.toggleSizeButton:SetNormalFontObject("GameFontNormal")
     instance.toggleSizeButton:SetHighlightFontObject("GameFontHighlight")
@@ -728,6 +752,21 @@ function DeathLogWidget.new()
     return instance
 end
 
+function DeathLogWidget:GetGuildFilterIcon()
+    local faction = UnitFactionGroup("player")
+    if faction == "Horde" then
+        return "Interface\\Icons\\inv_misc_tournaments_tabard_orc"
+    end
+    return "Interface\\Icons\\inv_misc_tournaments_tabard_human"
+end
+
+function DeathLogWidget:UpdateGuildFilterIcon()
+    if not self.guildBtn then
+        return
+    end
+    self.guildBtn:SetNormalTexture(self:GetGuildFilterIcon())
+end
+
 function DeathLogWidget:CreateFilterButton(texture, tooltip, onClickFunc, relativeTo, point, x, y)
     local button = CreateFrame("Button", nil, self.mainWnd)
     button:SetSize(22, 22)
@@ -749,8 +788,6 @@ function DeathLogWidget:AddTooltip(target, tooltip)
 end
 
 function DeathLogWidget:CreateTextFrame()
-    local phraseList = Utils.SplitString(phrases, "\n")
-
     local frame = CreateFrame("Frame", nil, self.scrollChild)
     frame:SetSize(self.scrollChild:GetWidth(), 14)
     frame:SetPoint("TOPLEFT", self.scrollChild, "TOPLEFT")
@@ -833,9 +870,10 @@ end
 
 --    entry.text:SetWidth(9999)
 
-function DeathLogWidget:AddEntry(data, tooltip, faction, playerName, parseGuild, class, timestamp)
+function DeathLogWidget:AddEntry(data, tooltip, faction, playerName, parseGuild, class, timestamp, meta)
     self.textFrames = self.textFrames or {}
     self.framePool = self.framePool or {}
+    meta = meta or {}
     
     local entry
     if #self.framePool > 0 then
@@ -859,6 +897,13 @@ function DeathLogWidget:AddEntry(data, tooltip, faction, playerName, parseGuild,
     entry.faction = faction
     entry.parseGuild = parseGuild
     entry.class = class
+    entry.locationStr = meta.locationStr
+    entry.mapX = meta.mapX
+    entry.mapY = meta.mapY
+    entry.isGuild = meta.isGuild
+    if entry.isGuild == nil then
+        entry.isGuild = Utils.IsGuildDeath(playerName, parseGuild, tooltip, data)
+    end
     entry.factionIcon:SetTexture(factionIcon)
     self:AddTooltip(entry, tooltip)
     
@@ -871,7 +916,7 @@ function DeathLogWidget:AddEntry(data, tooltip, faction, playerName, parseGuild,
     end
     
     if shouldShow and DeathLoggerDB.guildOnly then
-        shouldShow = Utils.IsPlayerInGuild(playerName)
+        shouldShow = Utils.IsGuildDeath(playerName, parseGuild, tooltip, data, entry.isGuild)
     end
     
     entry:SetShown(shouldShow)
@@ -947,6 +992,9 @@ function DeathLogWidget:ApplyFilter(filterId)
     self.allBtn:SetAlpha(filterId == FILTERS.ALL and 1.0 or 0.5)
     self.allianceBtn:SetAlpha(filterId == FILTERS.ALLIANCE and 1.0 or 0.5)
     self.hordeBtn:SetAlpha(filterId == FILTERS.HORDE and 1.0 or 0.5)
+    if self.guildBtn then
+        self.guildBtn:SetAlpha(DeathLoggerDB.guildOnly and 1.0 or 0.5)
+    end
     
     local filterFunc
     if filterId == FILTERS.ALLIANCE then
@@ -961,13 +1009,16 @@ function DeathLogWidget:ApplyFilter(filterId)
         local shouldShow = filterFunc(frame)
         
         if DeathLoggerDB.guildOnly then
-            shouldShow = shouldShow and Utils.IsPlayerInGuild(frame.playerName)
+            shouldShow = shouldShow and Utils.IsGuildDeath(frame.playerName, frame.parseGuild, frame.tooltip, frame.text and frame.text:GetText(), frame.isGuild)
         end
         
         frame:SetShown(shouldShow)
     end
     
     self:UpdateEntriesPosition()
+    if Map and Map.Refresh then
+        Map.Refresh()
+    end
 end
 
 function DeathLogWidget:Show()
@@ -1020,8 +1071,9 @@ end
 
 -- дата 
 
-local function SaveEntry(data, tooltip, faction, playerName, parseGuild, class, timestamp)
+local function SaveEntry(data, tooltip, faction, playerName, parseGuild, class, timestamp, meta)
     if not DeathLoggerDB.entries then DeathLoggerDB.entries = {} end
+    meta = meta or {}
     
     if not playerName or playerName == "" or not data or data == "" then
         if DEBUG then
@@ -1039,8 +1091,15 @@ local function SaveEntry(data, tooltip, faction, playerName, parseGuild, class, 
         playerName = playerName,
         parseGuild = parseGuild,
         class = class,
-        timestamp = timestamp or time()
+        timestamp = timestamp or time(),
+        locationStr = meta.locationStr,
+        mapX = meta.mapX,
+        mapY = meta.mapY,
+        isGuild = meta.isGuild
     }
+    if newEntry.isGuild == nil then
+        newEntry.isGuild = Utils.IsGuildDeath(playerName, parseGuild, tooltip, data)
+    end
     
     local insertIndex = 1
     for i, entry in ipairs(DeathLoggerDB.entries) do
@@ -1112,6 +1171,14 @@ local function OnDeath(text)
         Debug("[OnDeath] Баннер установлен")
     end
     
+    local mapX, mapY = dataMap.mapX, dataMap.mapY
+    if dataMap.name == UnitName("player") and Map and Map.CapturePlayerMapPos then
+        local px, py = Map.CapturePlayerMapPos()
+        if px and py then
+            mapX, mapY = px, py
+        end
+    end
+    
     local timerFrame = CreateFrame("Frame")
     local elapsedTime = 0
     timerFrame:SetScript("OnUpdate", function(self, elapsed)
@@ -1120,14 +1187,20 @@ local function OnDeath(text)
         local deadPlayerData, tooltip, playerName, class, side = FormatData(dataMap)
             local _, _, faction = Utils.GetRaceData(dataMap.raceID)
             local class = Utils.classes[dataMap.classID] or "Unknown"
+            local meta = {
+                locationStr = dataMap.locationStr,
+                mapX = mapX,
+                mapY = mapY,
+                isGuild = Utils.IsGuildDeath(playerName, parseGuild, tooltip, deadPlayerData)
+            }
             
             if widgetInstance then
-                widgetInstance:AddEntry(deadPlayerData, tooltip, faction, playerName, parseGuild)
+                widgetInstance:AddEntry(deadPlayerData, tooltip, faction, playerName, parseGuild, class, dataMap.timestamp, meta)
                 widgetInstance:ApplyFilter(widgetInstance.currentFilterId)
                 widgetInstance:UpdateEntriesPosition()
             end
             
-            SaveEntry(deadPlayerData, tooltip, side, playerName, parseGuild, class, dataMap.timestamp)
+            SaveEntry(deadPlayerData, tooltip, faction, playerName, parseGuild, class, dataMap.timestamp, meta)
             
             -- синхронизация
             if Sync and Sync.SaveEntryWithSync then
@@ -1183,14 +1256,20 @@ local function OnComplete(text)
             local challengeCompletedData, tooltip, playerName, class, side = FormatCompletedChallengeData(dataMap)
             local _, _, faction = Utils.GetRaceData(dataMap.raceID)
             local class = Utils.classes[dataMap.classID] or "Unknown"
+            local meta = {
+                locationStr = dataMap.locationStr,
+                mapX = dataMap.mapX,
+                mapY = dataMap.mapY,
+                isGuild = Utils.IsGuildDeath(playerName, parseGuild, tooltip, challengeCompletedData)
+            }
             
             if widgetInstance then
-                widgetInstance:AddEntry(challengeCompletedData, tooltip, faction, playerName, parseGuild)
+                widgetInstance:AddEntry(challengeCompletedData, tooltip, faction, playerName, parseGuild, class, dataMap.timestamp, meta)
                 widgetInstance:ApplyFilter(widgetInstance.currentFilterId)
                 widgetInstance:UpdateEntriesPosition()
             end
             
-            SaveEntry(challengeCompletedData, tooltip, faction, playerName, parseGuild, class, dataMap.timestamp)
+            SaveEntry(challengeCompletedData, tooltip, faction, playerName, parseGuild, class, dataMap.timestamp, meta)
             
             -- синхронизация
             if Sync and Sync.SaveEntryWithSync then
@@ -1318,7 +1397,21 @@ function LoadEntries()
         
         for i = maxEntriesToLoad, 1, -1 do
             local entryData = DeathLoggerDB.entries[i]
-            widgetInstance:AddEntry(entryData.data, entryData.tooltip, entryData.faction, entryData.playerName, entryData.parseGuild, entryData.class, entryData.timestamp)
+            widgetInstance:AddEntry(
+                entryData.data,
+                entryData.tooltip,
+                entryData.faction,
+                entryData.playerName,
+                entryData.parseGuild,
+                entryData.class,
+                entryData.timestamp,
+                {
+                    locationStr = entryData.locationStr,
+                    mapX = entryData.mapX,
+                    mapY = entryData.mapY,
+                    isGuild = entryData.isGuild
+                }
+            )
         end
     end
 end
@@ -1413,6 +1506,9 @@ local function OnEvent(self, event, ...)
             end
             
             initMinimapButton()
+            if Map and Map.Init then
+                Map.Init()
+            end
             Options.CreateOptionsPanel()
             if HardcoreLossBanner then
                 Options.UpdateBannerElements()
@@ -1421,7 +1517,7 @@ local function OnEvent(self, event, ...)
             print("|cFF00FF00Death Logger|r успешно загружен.")
         end
     elseif event == "CHAT_MSG_ADDON" then
-        local prefix, text, _, sender = ...
+        local prefix, text, channel, sender = ...
         if prefix == "ASMSG_HARDCORE_DEATH" then
             OnDeath(text)
             local cutData = Utils.StringToMap(text)
@@ -1433,7 +1529,7 @@ local function OnEvent(self, event, ...)
             local causeID = 11
             HCBL_Settings.currentDeathIcon = _G.deathIcons[causeID] or 11
             Debug("[ASMSG_HARDCORE_COMPLETE] Обработка OnComplete", text)
-        elseif prefix == DeathLoggerSync.PREFIX then
+        elseif DeathLoggerSync and prefix == DeathLoggerSync.PREFIX then
             DeathLoggerSync:OnSyncMessage(prefix, text, channel, sender)
         end
     elseif event == "WHO_LIST_UPDATE" then
@@ -1480,6 +1576,12 @@ local function OnEvent(self, event, ...)
         end
     elseif event == "PLAYER_ENTERING_WORLD" then
         local isLogin, isReload = ...
+        if widgetInstance and widgetInstance.UpdateGuildFilterIcon then
+            widgetInstance:UpdateGuildFilterIcon()
+        end
+        if IsInGuild() and GuildRoster then
+            GuildRoster()
+        end
         if (isLogin or isReload) and DeathLoggerDB.autoSync and DeathLoggerDB.syncEnabled and IsInGuild() then
             local delayFrame = CreateFrame("Frame")
             local elapsed = 0
