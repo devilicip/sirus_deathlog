@@ -1,6 +1,6 @@
 -------------------------------------------------------------------------------------------------
 -- Copyright 2024-2025 Lyubimov Vladislav (grifon7676@gmail.com)
--- Copyright 2025 Norzia (devilicip2@gmail.com) for sirus-wow
+-- Copyright 2025-2026 Norzia (devilicip2@gmail.com) for sirus-wow
 -- Thanks to testers and Я сегодня не Умру guild
 --
 -- Permission is hereby granted, free of charge, to any person obtaining a copy of this software
@@ -638,11 +638,26 @@ function DeathLogWidget.new()
         preferredIndex = 3,
     }
     
+    instance.mapButton = instance:CreateFilterButton(
+        "Interface\\Icons\\INV_Misc_Map_01",
+        "Смерти на карте мира",
+        function()
+            if Map and Map.Open then
+                Map.Open()
+            elseif WorldMapFrame then
+                if not WorldMapFrame:IsShown() then
+                    ToggleFrame(WorldMapFrame)
+                end
+            end
+        end,
+        resetButton, "TOPLEFT", -5, 0
+    )
+
     instance.allianceBtn = instance:CreateFilterButton(
         "Interface\\Icons\\Achievement_PVP_A_A", 
         "Фильтр: Альянс + Нейтрал",
         function() instance:ApplyFilter(FILTERS.ALLIANCE) end,
-        resetButton, "TOPLEFT", -5, 0
+        instance.mapButton, "TOPLEFT", -5, 0
     )
     instance.allianceBtn.filterId = FILTERS.ALLIANCE
         
@@ -675,23 +690,9 @@ function DeathLogWidget.new()
         instance.allBtn, "TOPLEFT", -5, 0
     )
     
-    instance.mapButton = CreateFrame("Button", nil, instance.mainWnd, "GameMenuButtonTemplate")
-    instance.mapButton:SetSize(60, 22)
-    instance.mapButton:SetPoint("TOPRIGHT", instance.guildBtn, "TOPLEFT", -5, 0)
-    instance.mapButton:SetText("Карта")
-    instance.mapButton:SetNormalFontObject("GameFontNormal")
-    instance.mapButton:SetHighlightFontObject("GameFontHighlight")
-    instance.mapButton:SetScript("OnClick", function()
-        if Map and Map.Open then
-            Map.Open()
-        elseif WorldMapFrame then
-            ToggleFrame(WorldMapFrame)
-        end
-    end)
-    
     instance.toggleSizeButton = CreateFrame("Button", nil, instance.mainWnd, "GameMenuButtonTemplate")
     instance.toggleSizeButton:SetSize(100, 22)
-    instance.toggleSizeButton:SetPoint("TOPRIGHT", instance.mapButton, "TOPLEFT", -5, 0)
+    instance.toggleSizeButton:SetPoint("TOPRIGHT", instance.guildBtn, "TOPLEFT", -5, 0)
     instance.toggleSizeButton:SetText("Статистика")
     instance.toggleSizeButton:SetNormalFontObject("GameFontNormal")
     instance.toggleSizeButton:SetHighlightFontObject("GameFontHighlight")

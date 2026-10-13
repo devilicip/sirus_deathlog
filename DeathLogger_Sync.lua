@@ -1359,44 +1359,44 @@ eventFrame:SetScript("OnEvent", function(_, event)
 end)
 
 -- API
--- DeathLoggerSync.API = {
-    -- ToggleDebug = function() DeathLoggerSync:ToggleDebug() end,
-    -- ShowSyncStats = function() DeathLoggerSync:ShowSyncStats() end,
-    -- ShowSyncEntries = function(num) DeathLoggerSync:ShowSyncEntries(num) end,
-    -- ClearAllSyncData = function() DeathLoggerSync:ClearAllSyncData() end,
-    -- ToggleSync = function() DeathLoggerSync:ToggleSync() end,
-    -- ToggleNotifications = function() DeathLoggerSync:ToggleNotifications() end,
-    -- RequestFullSync = function() DeathLoggerSync:RequestFullSync() end
--- }
+DeathLoggerSync.API = {
+    ToggleDebug = function() DeathLoggerSync:ToggleDebug() end,
+    ShowSyncStats = function() DeathLoggerSync:ShowSyncStats() end,
+    ShowSyncEntries = function(num) DeathLoggerSync:ShowSyncEntries(num) end,
+    ClearAllSyncData = function() DeathLoggerSync:ClearAllSyncData() end,
+    ToggleSync = function() DeathLoggerSync:ToggleSync() end,
+    ToggleNotifications = function() DeathLoggerSync:ToggleNotifications() end,
+    RequestFullSync = function() DeathLoggerSync:RequestFullSync() end
+}
 
 -- отладка  -- переделать на простую отладку к релизу либо закомментить
--- SLASH_DEATHLOGGERSYNC1 = "/dlsync"
--- SlashCmdList["DEATHLOGGERSYNC"] = function(msg)
-    -- local command = strlower(msg or "")
+SLASH_DEATHLOGGERSYNC1 = "/dlsync"
+SlashCmdList["DEATHLOGGERSYNC"] = function(msg)
+    local command = strlower(msg or "")
     
-    -- if command == "debug" then
-        -- DeathLoggerSync.API.ToggleDebug()
-    -- elseif command == "stats" then
-        -- DeathLoggerSync.API.ShowSyncStats()
-    -- elseif command:find("^show") then
-        -- local num = tonumber(command:match("show%s+(%d+)")) or 50
-        -- DeathLoggerSync.API.ShowSyncEntries(num)
-    -- elseif command == "clear" then
-        -- DeathLoggerSync.API.ClearAllSyncData()
-    -- elseif command == "toggle" then
-        -- DeathLoggerSync.API.ToggleSync()
-    -- elseif command == "notify" then
-        -- DeathLoggerSync.API.ToggleNotifications()
-    -- elseif command == "request" then
-        -- DeathLoggerSync.API.RequestFullSync()
-    -- else
-        -- print("|cff00ccff[DeathLogger Sync]|r Команды:")
-        -- print("|cff00ccff/dlsync debug|r - переключить отладку")
-        -- print("|cff00ccff/dlsync stats|r - показать статистику")
-        -- print("|cff00ccff/dlsync show [число]|r - показать записи")
-        -- print("|cff00ccff/dlsync clear|r - очистить данные")
-        -- print("|cff00ccff/dlsync toggle|r - переключить синхронизацию")
-        -- print("|cff00ccff/dlsync notify|r - переключить уведомления")
-        -- print("|cff00ccff/dlsync request|r - запросить историю")
-    -- end
--- end
+    if command == "debug" then
+        DeathLoggerSync.API.ToggleDebug()
+    elseif command == "stats" then
+        DeathLoggerSync.API.ShowSyncStats()
+    elseif command:find("^show") then
+        local num = tonumber(command:match("show%s+(%d+)")) or 50
+        DeathLoggerSync.API.ShowSyncEntries(num)
+    elseif command == "clear" then
+        DeathLoggerSync.API.ClearAllSyncData()
+    elseif command == "toggle" then
+        DeathLoggerSync.API.ToggleSync()
+    elseif command == "notify" then
+        DeathLoggerSync.API.ToggleNotifications()
+    elseif command == "request" then
+        DeathLoggerSync.API.RequestFullSync()
+    else
+        print("|cff00ccff[DeathLogger Sync]|r Команды:")
+        print("|cff00ccff/dlsync debug|r - переключить отладку")
+        print("|cff00ccff/dlsync stats|r - показать статистику")
+        print("|cff00ccff/dlsync show [число]|r - показать записи")
+        print("|cff00ccff/dlsync clear|r - очистить данные")
+        print("|cff00ccff/dlsync toggle|r - переключить синхронизацию")
+        print("|cff00ccff/dlsync notify|r - переключить уведомления")
+        print("|cff00ccff/dlsync request|r - запросить историю")
+    end
+end
